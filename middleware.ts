@@ -20,6 +20,7 @@ export async function middleware(request: NextRequest) {
   // Define public paths that don't require authentication
   const isPublicPath = path === '/admin/login' || 
                       path.startsWith('/api/auth') ||
+                      path === '/api/log' ||
                       path === '/favicon.ico';
 
   if (isPublicPath) {
@@ -41,11 +42,17 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
 
-    // For API routes, return 401 instead of redirecting
+    // For API routes, verify the token has necessary data
     if (path.startsWith('/api/')) {
-      if (!token.user.email) {
+      if (!token.user?.email || !token.user?.sessionId) {
         console.log('Middleware - Invalid session for API route');
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return NextResponse.json(
+          { 
+            error: 'Unauthorized', 
+            message: 'Invalid or expired session'
+          }, 
+          { status: 401 }
+        );
       }
     }
 

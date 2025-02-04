@@ -15,7 +15,7 @@ export default function LoginForm() {
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { data: session, status, update } = useSession();
+  const { data: session, status } = useSession();
 
   // Monitor session status changes
   useEffect(() => {

@@ -72,7 +72,7 @@ export const authOptions: NextAuthOptions = {
 
           const admin = await Admin.findOne({ username: credentials.username });
           if (!admin) {
-            await logAuth('Login failed - User not found', { username: credentials.username, ...requestInfo });
+            await logAuth('Login failed - User not found', { username: credentials.username }, requestInfo);
             throw new InvalidCredentialsError('Invalid username or password');
           }
 
@@ -86,10 +86,11 @@ export const authOptions: NextAuthOptions = {
           const sessionId = crypto.randomUUID();
 
           await logAuth('Admin login successful', { email: admin.username }, requestInfo);
+          
           return {
             id: admin._id.toString(),
             name: admin.username,
-            email: admin.email,
+            email: admin.username,
             loginTime: Date.now(),
             sessionId,
           };
@@ -128,14 +129,6 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }): Promise<CustomSession> {
       try {
-        if (!token.user && session.user) {
-          try {
-            await logAuth('Admin logged out', { email: session.user.email });
-          } catch (error) {
-            await logError('auth', 'Error logging signout', error as Error);
-          }
-        }
-
         if (!token.user) {
           throw new SessionError('Invalid session state');
         }

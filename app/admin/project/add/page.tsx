@@ -6,6 +6,8 @@ import ImageCropper from '../../../components/ImageCropper';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getRandomPlaceholder } from '../../../utils/placeholderIcons';
+import { ProjectCategory } from '@/types/projects';
+import { CATEGORY_CONFIG } from '@/app/config/categories';
 
 // Custom error classes
 class ProjectFormError extends Error {
@@ -35,19 +37,21 @@ const MAX_TITLE_LENGTH = 50;
 const MAX_DESCRIPTION_LENGTH = 300;
 const MAX_TAGS = 5;
 const MAX_SKILLS = 5;
-const ALLOWED_CATEGORIES = ['product', 'software', 'content', 'innovation'] as const;
 const URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
-
-type Category = typeof ALLOWED_CATEGORIES[number];
 
 interface ProjectData {
   title: string;
   description: string;
-  category: Category;
+  category: ProjectCategory;
   link?: string;
   image?: string;
   tags: string[];
   skills: string[];
+}
+
+// Type guard for ProjectCategory
+function isValidCategory(category: string): category is ProjectCategory {
+  return Object.keys(CATEGORY_CONFIG).includes(category);
 }
 
 function validateProjectData(data: ProjectData): void {
@@ -65,7 +69,7 @@ function validateProjectData(data: ProjectData): void {
     throw new ValidationError(`Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`, 'description');
   }
   
-  if (!ALLOWED_CATEGORIES.includes(data.category)) {
+  if (!isValidCategory(data.category)) {
     throw new ValidationError('Invalid category selected', 'category');
   }
   
@@ -314,9 +318,9 @@ function ProjectForm() {
       const projectData: ProjectData = {
         title: (formData.get('title') as string).trim(),
         description: (formData.get('description') as string).trim(),
-        category: formData.get('category') as Category,
+        category: formData.get('category') as ProjectCategory,
         link: (formData.get('link') as string)?.trim() || undefined,
-        image: imagePreview || getRandomPlaceholder(formData.get('category') as Category),
+        image: imagePreview || getRandomPlaceholder(formData.get('category') as ProjectCategory),
         tags,
         skills,
       };
@@ -417,10 +421,10 @@ function ProjectForm() {
             defaultValue={initialCategory || ''}
           >
             <option value="" disabled>Select a category</option>
-            <option value="product">Product</option>
-            <option value="software">Software</option>
-            <option value="content">Content</option>
-            <option value="innovation">Innovation</option>
+            <option value="product" className="text-product">Product</option>
+            <option value="software" className="text-software">Software</option>
+            <option value="content" className="text-content">Content</option>
+            <option value="innovation" className="text-innovation">Innovation</option>
           </select>
           {fieldErrors.category && (
             <p className="mt-1 text-sm text-red-400">{fieldErrors.category}</p>

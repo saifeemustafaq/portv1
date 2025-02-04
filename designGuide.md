@@ -51,6 +51,31 @@ We employ a sophisticated triple-font system:
   - Error: #ef4444 (Red)
   - Info: #0ea5e9 (Light Blue)
 
+#### Category Colors
+- **Product (Emerald)**:
+  - Base: #10b981 (Rich Emerald)
+  - Light: #34d399 (Light Emerald)
+  - Dark: #059669 (Deep Emerald)
+  - Muted: rgba(16, 185, 129, 0.2) (Backgrounds)
+
+- **Content (Yellow Sapphire)**:
+  - Base: #eab308 (Golden Yellow)
+  - Light: #facc15 (Bright Yellow)
+  - Dark: #ca8a04 (Deep Yellow)
+  - Muted: rgba(234, 179, 8, 0.2) (Backgrounds)
+
+- **Software (Ruby)**:
+  - Base: #e11d48 (Vibrant Ruby)
+  - Light: #f43f5e (Light Ruby)
+  - Dark: #be123c (Deep Ruby)
+  - Muted: rgba(225, 29, 72, 0.2) (Backgrounds)
+
+- **Innovation (Amethyst)**:
+  - Base: #9333ea (Rich Purple)
+  - Light: #a855f7 (Light Purple)
+  - Dark: #7e22ce (Deep Purple)
+  - Muted: rgba(147, 51, 234, 0.2) (Backgrounds)
+
 #### Interactive States
 - **Button Gradients**:
   - Primary: #3b82f6 to #2563eb (Solid colors for better contrast)

@@ -7,6 +7,14 @@ import { logAction, logError } from '@/app/utils/logger';
 import { authOptions } from '@/app/api/auth/auth.config';
 import { AuthenticationError, ValidationError, NotFoundError, DatabaseError } from '@/lib/errors/CustomErrors';
 import { withErrorHandler } from '@/lib/errors/errorMiddleware';
+import { ProjectCategory } from '@/types/projects';
+import { CATEGORY_CONFIG } from '@/app/config/categories';
+import { InvalidCategoryError } from '@/app/utils/errors/ProjectErrors';
+
+// Type guard for ProjectCategory
+function isValidCategory(category: string): category is ProjectCategory {
+  return Object.keys(CATEGORY_CONFIG).includes(category);
+}
 
 async function handleGetProjects(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -30,9 +38,12 @@ async function handleGetProjects(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get('category');
 
-  // Validate category if provided
-  if (category && !['product', 'software', 'content', 'innovation'].includes(category)) {
-    throw new ValidationError('Invalid category', { category });
+  if (!category) {
+    throw new InvalidCategoryError('Category parameter is required');
+  }
+
+  if (!isValidCategory(category)) {
+    throw new InvalidCategoryError(`Invalid category: ${category}`);
   }
 
   try {

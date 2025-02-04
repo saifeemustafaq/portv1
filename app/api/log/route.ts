@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logAuth, logAction, logSystem } from '@/app/utils/logger';
-import { headers } from 'next/headers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,7 +7,6 @@ export async function POST(request: NextRequest) {
     const { level, category, message, details } = body;
 
     // Get request information
-    const headersList = headers();
     const requestInfo = {
       ip: request.headers.get('x-forwarded-for') || 'unknown',
       userAgent: request.headers.get('user-agent') || undefined,

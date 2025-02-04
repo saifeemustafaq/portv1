@@ -1,13 +1,16 @@
 // Collection of modern, minimalist SVG icons for different project categories
 // Each category has its own distinct, professional icon design
 
-const colors = {
+import { ProjectCategory } from '@/types/projects';
+
+const colors: Record<ProjectCategory, string> = {
   product: '#3B82F6', // Blue
   software: '#10B981', // Green
   content: '#8B5CF6',  // Purple
+  innovation: '#F59E0B', // Amber
 };
 
-const categoryIcons = {
+const categoryIcons: Record<ProjectCategory, (color: string) => string> = {
   product: (color: string) => `data:image/svg+xml;base64,${Buffer.from(`
     <svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="400" height="400" fill="#1a1f2e"/>
@@ -34,9 +37,18 @@ const categoryIcons = {
       <circle cx="280" cy="260" r="20" fill="${color}" opacity="0.8"/>
     </svg>
   `).toString('base64')}`,
+
+  innovation: (color: string) => `data:image/svg+xml;base64,${Buffer.from(`
+    <svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="400" height="400" fill="#1a1f2e"/>
+      <circle cx="200" cy="180" r="60" stroke="${color}" stroke-width="16" opacity="0.3"/>
+      <path d="M200 120v120M160 180h80M200 260v40" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
+      <circle cx="200" cy="180" r="20" fill="${color}" opacity="0.8"/>
+    </svg>
+  `).toString('base64')}`,
 };
 
-export function getRandomPlaceholder(category?: 'product' | 'software' | 'content'): string {
+export function getRandomPlaceholder(category?: ProjectCategory): string {
   // If category is provided, use its specific icon and color
   if (category && category in categoryIcons) {
     return categoryIcons[category](colors[category]);

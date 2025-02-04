@@ -1,0 +1,1 @@
+// This file can be empty for now as we're using inline types 

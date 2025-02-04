@@ -114,7 +114,7 @@ Details: ${details}
           <h1 className="text-3xl font-bold tracking-tight text-white serif">
             Log Monitor
           </h1>
-          <p className="mt-2 text-[#94a3b8]">
+          <p className="mt-2 text-gray-300">
             Monitor and analyze system logs
           </p>
         </div>
@@ -138,7 +138,7 @@ Details: ${details}
 
       <div className="flex flex-wrap items-center gap-4 pb-4">
         <div className="flex items-center space-x-2">
-          <RiFilterLine className="h-5 w-5 text-[#94a3b8]" />
+          <RiFilterLine className="h-5 w-5 text-gray-300" />
           <select
             value={level}
             onChange={(e) => setLevel(e.target.value as 'all' | 'info' | 'warn' | 'error')}
@@ -194,7 +194,7 @@ Details: ${details}
       <div className="bg-[#1a1f2e] rounded-lg border border-gray-800">
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="text-lg text-[#94a3b8]">Loading logs...</div>
+            <div className="text-lg text-gray-300">Loading logs...</div>
           </div>
         ) : logs.length > 0 ? (
           <div className="divide-y divide-gray-800">
@@ -206,7 +206,7 @@ Details: ${details}
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3">
-                      <span className="text-sm text-[#94a3b8]">
+                      <span className="text-sm text-gray-300">
                         {new Date(log.timestamp).toLocaleString()}
                       </span>
                       <span
@@ -228,17 +228,17 @@ Details: ${details}
                     </div>
                     <p className="mt-1 text-white">{log.message}</p>
                     {log.username && (
-                      <p className="mt-1 text-sm text-[#94a3b8]">
+                      <p className="mt-1 text-sm text-gray-300">
                         User: {log.username}
                       </p>
                     )}
                     {log.ip && (
-                      <p className="text-sm text-[#94a3b8]">
+                      <p className="text-sm text-gray-300">
                         IP: {log.ip}
                       </p>
                     )}
-                    {Object.keys(log.details).length > 0 && (
-                      <pre className="mt-2 p-2 bg-black/20 rounded text-sm text-[#94a3b8] overflow-x-auto">
+                    {log.details && Object.keys(log.details).length > 0 && (
+                      <pre className="mt-2 p-2 bg-black/20 rounded text-sm text-gray-300 overflow-x-auto">
                         {JSON.stringify(log.details, null, 2)}
                       </pre>
                     )}
@@ -249,7 +249,7 @@ Details: ${details}
           </div>
         ) : (
           <div className="flex items-center justify-center h-64">
-            <div className="text-lg text-[#94a3b8]">No logs found</div>
+            <div className="text-lg text-gray-300">No logs found</div>
           </div>
         )}
       </div>
