@@ -182,7 +182,7 @@ export default function SoftwarePage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Link
-                    href={`/admin/project/${project._id}/edit`}
+                    href={`/admin/project/add?id=${project._id}`}
                     className="p-1 text-[#94a3b8] hover:text-white transition-colors"
                   >
                     <RiEditLine className="h-4 w-4" />

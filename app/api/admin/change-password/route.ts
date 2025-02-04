@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import bcrypt from 'bcryptjs';
 import connectDB from '@/lib/db';
 import Admin from '@/models/Admin';
+import { logAuth, logError } from '@/app/utils/logger';
 
 export async function PUT(request: NextRequest) {
   try {
@@ -23,12 +24,14 @@ export async function PUT(request: NextRequest) {
     const admin = await Admin.findOne({ email: session.user.email });
 
     if (!admin) {
+      await logAuth('Password change failed - admin not found', { email: session.user.email });
       return NextResponse.json({ message: 'Admin not found' }, { status: 404 });
     }
 
     const isMatch = await bcrypt.compare(currentPassword, admin.password);
 
     if (!isMatch) {
+      await logAuth('Password change failed - invalid current password', { email: admin.email });
       return NextResponse.json({ message: 'Current password is incorrect' }, { status: 400 });
     }
 
@@ -38,9 +41,10 @@ export async function PUT(request: NextRequest) {
     admin.password = hashedPassword;
     await admin.save();
 
+    await logAuth('Password changed successfully', { email: admin.email });
     return NextResponse.json({ message: 'Password updated successfully' });
   } catch (error: Error | unknown) {
-    console.error('Change password error:', error);
+    await logError('auth', 'Error changing password', error);
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ message: errorMessage }, { status: 500 });
   }

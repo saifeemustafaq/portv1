@@ -6,6 +6,7 @@ import Log from '@/models/Log';
 import { JWT } from 'next-auth/jwt';
 import crypto from 'crypto';
 import { headers } from 'next/headers';
+import { logAuth, logError } from '@/app/utils/logger';
 
 interface CustomUser {
   id: string;
@@ -53,6 +54,7 @@ const handler = NextAuth({
               path: '/api/auth/signin',
               method: 'POST'
             });
+            await logAuth('Login failed - Invalid credentials', { email: credentials.username });
             throw new Error('Invalid credentials');
           }
 
@@ -74,6 +76,7 @@ const handler = NextAuth({
               path: '/api/auth/signin',
               method: 'POST'
             });
+            await logAuth('Login failed - Invalid credentials', { email: credentials.username });
             throw new Error('Invalid credentials');
           }
 
@@ -97,6 +100,7 @@ const handler = NextAuth({
             method: 'POST'
           });
 
+          await logAuth('Admin login successful', { email: admin.username });
           return {
             id: admin._id.toString(),
             name: admin.username,
@@ -122,6 +126,7 @@ const handler = NextAuth({
               method: 'POST'
             });
           }
+          await logError('auth', 'Login error occurred', error);
           throw error;
         }
       }
@@ -155,6 +160,14 @@ const handler = NextAuth({
       session.loginTime = token.loginTime;
       session.sessionId = token.sessionId;
       return session;
+    },
+    async signOut({ token }) {
+      try {
+        await logAuth('Admin logged out', { email: token.email });
+      } catch (error) {
+        console.error('Error logging signout:', error);
+      }
+      return true;
     }
   },
   cookies: {

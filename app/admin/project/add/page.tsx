@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { RiUploadCloud2Line, RiCloseLine } from 'react-icons/ri';
 import ImageCropper from '../../../components/ImageCropper';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getRandomPlaceholder } from '../../../utils/placeholderIcons';
 
-export default function AddProjectPage() {
+export default function ProjectFormPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
@@ -18,8 +18,56 @@ export default function AddProjectPage() {
   const [skillInput, setSkillInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showCropper, setShowCropper] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [initialCategory, setInitialCategory] = useState<string>('');
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('id');
+
+  useEffect(() => {
+    if (projectId) {
+      fetchProjectData();
+    }
+  }, [projectId]);
+
+  const fetchProjectData = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/admin/project/${projectId}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch project');
+      }
+
+      const project = data.project;
+      setIsEditMode(true);
+      
+      // Pre-fill form data
+      if (formRef.current) {
+        const titleInput = formRef.current.querySelector<HTMLInputElement>('[name="title"]');
+        const descriptionInput = formRef.current.querySelector<HTMLTextAreaElement>('[name="description"]');
+        const linkInput = formRef.current.querySelector<HTMLInputElement>('[name="link"]');
+        const categorySelect = formRef.current.querySelector<HTMLSelectElement>('[name="category"]');
+        
+        if (titleInput) titleInput.value = project.title;
+        if (descriptionInput) descriptionInput.value = project.description;
+        if (linkInput) linkInput.value = project.link || '';
+        if (categorySelect) categorySelect.value = project.category;
+      }
+
+      setInitialCategory(project.category);
+      setImagePreview(project.image);
+      setTags(project.tags || []);
+      setSkills(project.skills || []);
+    } catch (error: Error | unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch project data';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -151,8 +199,11 @@ export default function AddProjectPage() {
         skills,
       };
 
-      const response = await fetch('/api/admin/project', {
-        method: 'POST',
+      const url = isEditMode ? `/api/admin/project/${projectId}` : '/api/admin/project';
+      const method = isEditMode ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -162,31 +213,43 @@ export default function AddProjectPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to add project');
+        throw new Error(data.message || `Failed to ${isEditMode ? 'update' : 'add'} project`);
       }
 
-      setSuccess('Project added successfully');
-      formRef.current?.reset();
-      setImagePreview(null);
-      setTags([]);
-      setSkills([]);
+      setSuccess(`Project ${isEditMode ? 'updated' : 'added'} successfully`);
+      
+      if (!isEditMode) {
+        formRef.current?.reset();
+        setImagePreview(null);
+        setTags([]);
+        setSkills([]);
+      }
+      
       router.push('/admin/dashboard');
     } catch (error: Error | unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred while saving the project';
+      const errorMessage = error instanceof Error ? error.message : `An error occurred while ${isEditMode ? 'updating' : 'saving'} the project`;
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
+  if (loading && isEditMode) {
+    return (
+      <div className="flex items-center justify-center min-h-[200px]">
+        <div className="text-lg text-[#94a3b8]">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white serif">
-          Add New Project
+          {isEditMode ? 'Edit Project' : 'Add New Project'}
         </h1>
         <p className="mt-2 text-[#94a3b8]">
-          Create a new project to showcase in your portfolio
+          {isEditMode ? 'Update your project details' : 'Create a new project to showcase in your portfolio'}
         </p>
       </div>
 
@@ -210,6 +273,8 @@ export default function AddProjectPage() {
             id="category"
             name="category"
             required
+            value={initialCategory}
+            onChange={(e) => setInitialCategory(e.target.value)}
             className="relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
           >
             <option value="">Select a category</option>
@@ -388,7 +453,7 @@ export default function AddProjectPage() {
             disabled={loading}
             className="group relative flex w-full justify-center rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition duration-300 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#0a0f1a] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Adding Project...' : 'Add Project'}
+            {loading ? (isEditMode ? 'Updating Project...' : 'Adding Project...') : (isEditMode ? 'Update Project' : 'Add Project')}
           </button>
         </div>
       </form>
