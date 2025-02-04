@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { RiAddCircleLine, RiEditLine, RiDeleteBinLine } from 'react-icons/ri';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 interface Project {
   _id: string;
@@ -27,18 +29,38 @@ export default function ProductPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const { data: session, status } = useSession();
+  const router = useRouter();
 
   useEffect(() => {
-    fetchProjects();
-  }, []);
+    if (status === 'unauthenticated') {
+      router.push('/admin/login');
+      return;
+    }
+    
+    if (status === 'authenticated') {
+      fetchProjects();
+    }
+  }, [status, router]);
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('/api/admin/project?category=product');
+      const response = await fetch('/api/admin/project?category=product', {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.status === 401) {
+        router.push('/admin/login');
+        return;
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch projects');
+        throw new Error(data.error || 'Failed to fetch projects');
       }
 
       setProjects(data.projects);
@@ -56,14 +78,23 @@ export default function ProductPage() {
     }
 
     try {
-      const response = await fetch(`/api/admin/project/${id}`, {
+      const response = await fetch(`/api/admin/project?id=${id}`, {
         method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
+
+      if (response.status === 401) {
+        router.push('/admin/login');
+        return;
+      }
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to delete project');
+        throw new Error(data.error || 'Failed to delete project');
       }
 
       setProjects(projects.filter(project => project._id !== id));
@@ -73,7 +104,7 @@ export default function ProductPage() {
     }
   };
 
-  if (loading) {
+  if (status === 'loading' || loading) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
         <div className="text-lg text-[#94a3b8]">Loading...</div>

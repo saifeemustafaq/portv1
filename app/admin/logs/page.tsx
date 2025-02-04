@@ -1,16 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { RiRefreshLine, RiDownloadLine, RiFilterLine, RiCalendarLine } from 'react-icons/ri';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+
+interface LogDetails {
+  [key: string]: string | number | boolean | null | undefined;
+  error?: string;
+  stack?: string;
+}
 
 interface LogEntry {
   timestamp: string;
   level: 'info' | 'warn' | 'error';
   category: 'auth' | 'action' | 'system';
   message: string;
-  details: any;
+  details: LogDetails;
   userId?: string;
   username?: string;
   ip?: string;
@@ -41,7 +47,7 @@ export default function LogMonitorPage() {
     totalPages: 0
   });
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -58,16 +64,16 @@ export default function LogMonitorPage() {
       setLogs(data.logs);
       setPagination(data.pagination);
       setError(null);
-    } catch (err) {
+    } catch {
       setError('Failed to fetch logs. Please try again later.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [level, category, startDate, endDate, pagination.page, pagination.limit]);
 
   useEffect(() => {
-    fetchLogs();
-  }, [level, category, startDate, endDate, pagination.page]);
+    void fetchLogs();
+  }, [level, category, startDate, endDate, pagination.page, fetchLogs]);
 
   const handleRefresh = () => {
     fetchLogs();
@@ -135,7 +141,7 @@ Details: ${details}
           <RiFilterLine className="h-5 w-5 text-[#94a3b8]" />
           <select
             value={level}
-            onChange={(e) => setLevel(e.target.value as any)}
+            onChange={(e) => setLevel(e.target.value as 'all' | 'info' | 'warn' | 'error')}
             className="bg-[#1a1f2e] text-white border border-gray-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Levels</option>
@@ -148,7 +154,7 @@ Details: ${details}
         <div className="flex items-center space-x-2">
           <select
             value={category}
-            onChange={(e) => setCategory(e.target.value as any)}
+            onChange={(e) => setCategory(e.target.value as 'all' | 'auth' | 'action' | 'system')}
             className="bg-[#1a1f2e] text-white border border-gray-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Categories</option>

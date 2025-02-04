@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { RiUploadCloud2Line, RiCloseLine } from 'react-icons/ri';
 import ImageCropper from '../../../components/ImageCropper';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getRandomPlaceholder } from '../../../utils/placeholderIcons';
 
-export default function ProjectFormPage() {
+function ProjectForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
@@ -25,13 +25,7 @@ export default function ProjectFormPage() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('id');
 
-  useEffect(() => {
-    if (projectId) {
-      fetchProjectData();
-    }
-  }, [projectId]);
-
-  const fetchProjectData = async () => {
+  const fetchProjectData = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/admin/project/${projectId}`);
@@ -67,7 +61,13 @@ export default function ProjectFormPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (projectId) {
+      void fetchProjectData();
+    }
+  }, [projectId, fetchProjectData]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -466,5 +466,13 @@ export default function ProjectFormPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function ProjectFormPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ProjectForm />
+    </Suspense>
   );
 } 

@@ -26,41 +26,62 @@ export default function LoginForm() {
     const username = formData.get('username') as string;
     const password = formData.get('password') as string;
 
+    if (!username || !password) {
+      setError({ message: 'Please enter both username and password' });
+      setLoading(false);
+      return;
+    }
+
     try {
       const result = await signIn('credentials', {
         username,
         password,
         redirect: false,
+        callbackUrl: '/admin/dashboard',
       });
 
       if (result?.error) {
-        // Just set the error message for the user without console.error
         setError({ message: result.error });
-      } else if (!result?.ok) {
-        setError({ message: 'An unexpected error occurred' });
-        // Keep this console.error as it's an actual unexpected error
-        console.error('Unexpected result:', result);
-      } else {
-        // Wait briefly for session to establish
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Force session update
-        await update();
-        
-        // Check session
+        console.error('Authentication error:', result.error);
+        return;
+      }
+
+      if (!result?.ok) {
+        setError({ message: 'An unexpected error occurred during sign in' });
+        console.error('Sign in failed:', result);
+        return;
+      }
+
+      // Wait briefly for session to establish
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Force session update
+      await update();
+      
+      try {
         const response = await fetch('/api/auth/session');
+        if (!response.ok) {
+          throw new Error('Failed to fetch session');
+        }
+        
         const sessionData = await response.json();
         
         if (sessionData?.user) {
           router.push('/admin/dashboard');
         } else {
-          console.error('Session not established after successful login');
-          setError({ message: 'Failed to establish session. Please try again.' });
+          throw new Error('Session not established');
         }
+      } catch (sessionError) {
+        console.error('Session verification failed:', sessionError);
+        setError({ message: 'Failed to establish session. Please try again.' });
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError({ message: err instanceof Error ? err.message : 'An error occurred. Please try again.' });
+      setError({ 
+        message: err instanceof Error 
+          ? `Login failed: ${err.message}` 
+          : 'An unexpected error occurred. Please try again.'
+      });
     } finally {
       setLoading(false);
     }

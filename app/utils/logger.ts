@@ -1,13 +1,17 @@
 import Log from '@/models/Log';
-import { getSession } from 'next-auth/react';
+import { getServerSession } from 'next-auth';
 import connectDB from '@/lib/db';
 
 type LogLevel = 'info' | 'warn' | 'error';
 type LogCategory = 'auth' | 'action' | 'system';
 
+interface LogDetails {
+  [key: string]: string | number | boolean | null | undefined;
+}
+
 interface LogData {
   message: string;
-  details?: any;
+  details?: LogDetails;
   userId?: string;
   username?: string;
   ip?: string;
@@ -16,11 +20,21 @@ interface LogData {
   method?: string;
 }
 
+const isServer = () => {
+  return typeof window === 'undefined' && process.env.NEXT_RUNTIME === 'nodejs';
+};
+
 async function createLog(
   level: LogLevel,
   category: LogCategory,
   data: LogData
 ) {
+  if (!isServer()) {
+    // On client side or edge runtime, just console log
+    console.log(`[${level}][${category}] ${data.message}`, data.details || {});
+    return;
+  }
+
   try {
     // Ensure database connection is established
     await connectDB();
@@ -41,15 +55,18 @@ async function createLog(
 
     await Log.create(logEntry);
   } catch (error) {
-    // Don't throw the error to prevent breaking the application flow
-    console.error('Error creating log:', error);
+    // If logging fails, fallback to console
+    console.error('Failed to create log entry:', error);
+    console.log(`[${level}][${category}] ${data.message}`, data.details || {});
   }
 }
 
 // Authentication logs
-export async function logAuth(message: string, details?: any, requestInfo?: Partial<LogData>) {
+export async function logAuth(message: string, details?: LogDetails, requestInfo?: Partial<LogData>) {
+  if (!isServer()) return;
+  
   try {
-    const session = await getSession();
+    const session = await getServerSession();
     await createLog('info', 'auth', {
       message,
       details,
@@ -63,9 +80,11 @@ export async function logAuth(message: string, details?: any, requestInfo?: Part
 }
 
 // User action logs
-export async function logAction(message: string, details?: any, requestInfo?: Partial<LogData>) {
+export async function logAction(message: string, details?: LogDetails, requestInfo?: Partial<LogData>) {
+  if (!isServer()) return;
+
   try {
-    const session = await getSession();
+    const session = await getServerSession();
     await createLog('info', 'action', {
       message,
       details,
@@ -82,9 +101,11 @@ export async function logAction(message: string, details?: any, requestInfo?: Pa
 export async function logSystem(
   level: LogLevel,
   message: string,
-  details?: any,
+  details?: LogDetails,
   requestInfo?: Partial<LogData>
 ) {
+  if (!isServer()) return;
+
   try {
     await createLog(level, 'system', {
       message,
@@ -100,11 +121,13 @@ export async function logSystem(
 export async function logError(
   category: LogCategory,
   message: string,
-  error: any,
+  error: Error,
   requestInfo?: Partial<LogData>
 ) {
+  if (!isServer()) return;
+
   try {
-    const session = await getSession();
+    const session = await getServerSession();
     await createLog('error', category, {
       message,
       details: {

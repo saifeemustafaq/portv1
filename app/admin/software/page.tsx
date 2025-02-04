@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { RiAddCircleLine, RiEditLine, RiDeleteBinLine } from 'react-icons/ri';
 
 interface Project {
@@ -27,24 +29,43 @@ export default function SoftwarePage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const { data: session, status } = useSession();
+  const router = useRouter();
 
   useEffect(() => {
-    fetchProjects();
-  }, []);
+    if (status === 'unauthenticated') {
+      router.replace('/admin/login');
+    } else if (status === 'authenticated') {
+      fetchProjects();
+    }
+  }, [status, router]);
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('/api/admin/project?category=software');
+      const response = await fetch('/api/admin/project?category=software', {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      
+      if (response.status === 401) {
+        router.replace('/admin/login');
+        return;
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch projects');
+        throw new Error(data.error || 'Failed to fetch projects');
       }
 
       setProjects(data.projects);
+      setError('');
     } catch (error: Error | unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while fetching projects';
       setError(errorMessage);
+      console.error('Error fetching projects:', error);
     } finally {
       setLoading(false);
     }
@@ -56,29 +77,44 @@ export default function SoftwarePage() {
     }
 
     try {
-      const response = await fetch(`/api/admin/project/${id}`, {
+      const response = await fetch(`/api/admin/project?id=${id}`, {
         method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
       });
+
+      if (response.status === 401) {
+        router.replace('/admin/login');
+        return;
+      }
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to delete project');
+        throw new Error(data.error || 'Failed to delete project');
       }
 
       setProjects(projects.filter(project => project._id !== id));
+      setError('');
     } catch (error: Error | unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to delete project';
       setError(errorMessage);
+      console.error('Error deleting project:', error);
     }
   };
 
-  if (loading) {
+  if (status === 'loading' || loading) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
         <div className="text-lg text-[#94a3b8]">Loading...</div>
       </div>
     );
+  }
+
+  if (status === 'unauthenticated') {
+    return null; // Router will handle redirect
   }
 
   return (
@@ -199,7 +235,7 @@ export default function SoftwarePage() {
           </div>
         ))}
 
-        {projects.length === 0 && (
+        {projects.length === 0 && !error && (
           <div className="col-span-full text-center py-12 bg-[#1a1f2e] rounded-lg border border-gray-800">
             <p className="text-[#94a3b8]">No software projects found.</p>
             <Link

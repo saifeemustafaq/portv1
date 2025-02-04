@@ -3,6 +3,15 @@ import { getServerSession } from 'next-auth';
 import connectDB from '@/lib/db';
 import Log from '@/models/Log';
 
+interface LogQuery {
+  level?: string;
+  category?: string;
+  timestamp?: {
+    $gte?: Date;
+    $lte?: Date;
+  };
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession();
   if (!session) {
@@ -22,7 +31,7 @@ export async function GET(request: Request) {
     const limit = parseInt(url.searchParams.get('limit') || '50');
 
     // Build query
-    const query: any = {};
+    const query: LogQuery = {};
     if (level && level !== 'all') {
       query.level = level;
     }

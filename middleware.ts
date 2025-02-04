@@ -2,73 +2,78 @@ import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import type { NextRequest } from 'next/server';
 import type { JWT } from 'next-auth/jwt';
-import { logSystem } from '@/app/utils/logger';
 
 interface CustomJWT extends JWT {
   sessionId?: string;
   user?: {
     sessionId?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
 export async function middleware(request: NextRequest) {
-  const startTime = Date.now();
-  
-  // Only log API calls
-  if (request.nextUrl.pathname.startsWith('/api/')) {
-    try {
-      await logSystem('info', 'API request started', {
-        method: request.method,
-        path: request.nextUrl.pathname,
-        query: Object.fromEntries(request.nextUrl.searchParams.entries())
-      });
-
-      const response = NextResponse.next();
-
-      const duration = Date.now() - startTime;
-      await logSystem('info', 'API request completed', {
-        method: request.method,
-        path: request.nextUrl.pathname,
-        duration,
-        status: response.status
-      });
-
-      return response;
-    } catch (error) {
-      await logSystem('error', 'API request failed', {
-        method: request.method,
-        path: request.nextUrl.pathname,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      return NextResponse.next();
-    }
-  }
-
   const path = request.nextUrl.pathname;
+  
+  // Add debug logging
+  console.log('Middleware - Path:', path);
 
   // Define public paths that don't require authentication
-  const isPublicPath = path === '/admin/login';
+  const isPublicPath = path === '/admin/login' || 
+                      path.startsWith('/api/auth') ||
+                      path === '/favicon.ico';
 
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET,
-  }) as CustomJWT | null;
+  if (isPublicPath) {
+    console.log('Middleware - Public path, allowing access');
+    return NextResponse.next();
+  }
 
-  // Redirect to login if trying to access a protected route without being authenticated
-  if (!isPublicPath && (!token || !token.sessionId || !token.user?.sessionId || token.sessionId !== token.user.sessionId)) {
+  try {
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+    }) as CustomJWT | null;
+
+    console.log('Middleware - Token retrieved:', token ? 'yes' : 'no');
+
+    // Redirect to login if trying to access a protected route without being authenticated
+    if (!token) {
+      console.log('Middleware - No token found, redirecting to login');
+      return NextResponse.redirect(new URL('/admin/login', request.url));
+    }
+
+    // For API routes, return 401 instead of redirecting
+    if (path.startsWith('/api/')) {
+      if (!token.sessionId || !token.user?.sessionId || token.sessionId !== token.user.sessionId) {
+        console.log('Middleware - Invalid session for API route');
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    } else {
+      // For non-API routes, redirect to login if session is invalid
+      if (!token.sessionId || !token.user?.sessionId || token.sessionId !== token.user.sessionId) {
+        console.log('Middleware - Invalid session for protected route, redirecting to login');
+        return NextResponse.redirect(new URL('/admin/login', request.url));
+      }
+    }
+
+    // Allow access to protected routes
+    console.log('Middleware - Valid token, allowing access');
+    return NextResponse.next();
+  } catch (error) {
+    console.error('Middleware - Error:', error);
+    // For API routes, return 401 instead of redirecting
+    if (path.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.redirect(new URL('/admin/login', request.url));
   }
-
-  // Redirect to dashboard if trying to access login while already authenticated
-  if (isPublicPath && token && token.sessionId && token.user?.sessionId && token.sessionId === token.user.sessionId) {
-    return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-  }
-
-  return NextResponse.next();
 }
 
 // Configure paths that should be protected
 export const config = {
-  matcher: ['/admin/:path*', '/api/:path*'],
+  matcher: [
+    // Match all admin routes except login
+    '/admin/((?!login$).*)',
+    // Match all API routes except auth
+    '/api/((?!auth/).*)',
+  ],
 }; 
