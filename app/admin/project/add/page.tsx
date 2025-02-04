@@ -7,9 +7,85 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getRandomPlaceholder } from '../../../utils/placeholderIcons';
 
+// Custom error classes
+class ProjectFormError extends Error {
+  constructor(message: string, public field?: string) {
+    super(message);
+    this.name = 'ProjectFormError';
+  }
+}
+
+class ValidationError extends ProjectFormError {
+  constructor(message: string, field?: string) {
+    super(message, field);
+    this.name = 'ValidationError';
+  }
+}
+
+class NetworkError extends ProjectFormError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
+// Constants
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_TITLE_LENGTH = 50;
+const MAX_DESCRIPTION_LENGTH = 300;
+const MAX_TAGS = 5;
+const MAX_SKILLS = 5;
+const ALLOWED_CATEGORIES = ['product', 'software', 'content', 'innovation'] as const;
+const URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
+
+type Category = typeof ALLOWED_CATEGORIES[number];
+
+interface ProjectData {
+  title: string;
+  description: string;
+  category: Category;
+  link?: string;
+  image?: string;
+  tags: string[];
+  skills: string[];
+}
+
+function validateProjectData(data: ProjectData): void {
+  if (!data.title.trim()) {
+    throw new ValidationError('Title is required', 'title');
+  }
+  if (data.title.length > MAX_TITLE_LENGTH) {
+    throw new ValidationError(`Title must be ${MAX_TITLE_LENGTH} characters or less`, 'title');
+  }
+  
+  if (!data.description.trim()) {
+    throw new ValidationError('Description is required', 'description');
+  }
+  if (data.description.length > MAX_DESCRIPTION_LENGTH) {
+    throw new ValidationError(`Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`, 'description');
+  }
+  
+  if (!ALLOWED_CATEGORIES.includes(data.category)) {
+    throw new ValidationError('Invalid category selected', 'category');
+  }
+  
+  if (data.link && !URL_REGEX.test(data.link)) {
+    throw new ValidationError('Invalid project URL format', 'link');
+  }
+  
+  if (data.tags.length > MAX_TAGS) {
+    throw new ValidationError(`Maximum ${MAX_TAGS} tags allowed`, 'tags');
+  }
+  
+  if (data.skills.length > MAX_SKILLS) {
+    throw new ValidationError(`Maximum ${MAX_SKILLS} skills allowed`, 'skills');
+  }
+}
+
 function ProjectForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string>('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
@@ -25,14 +101,25 @@ function ProjectForm() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('id');
 
+  const clearErrors = () => {
+    setError('');
+    setFieldErrors({});
+  };
+
+  const setFieldError = (field: string, message: string) => {
+    setFieldErrors(prev => ({ ...prev, [field]: message }));
+  };
+
   const fetchProjectData = useCallback(async () => {
     try {
       setLoading(true);
+      clearErrors();
+
       const response = await fetch(`/api/admin/project/${projectId}`);
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch project');
+        throw new NetworkError(data.message || 'Failed to fetch project');
       }
 
       const project = data.project;
@@ -55,9 +142,13 @@ function ProjectForm() {
       setImagePreview(project.image);
       setTags(project.tags || []);
       setSkills(project.skills || []);
-    } catch (error: Error | unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch project data';
-      setError(errorMessage);
+    } catch (error) {
+      if (error instanceof NetworkError) {
+        setError(error.message);
+      } else {
+        setError('Failed to fetch project data. Please try again.');
+      }
+      console.error('Error fetching project:', error);
     } finally {
       setLoading(false);
     }
@@ -71,20 +162,39 @@ function ProjectForm() {
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        setError('Image size should be less than 5MB');
-        return;
+    if (!file) return;
+
+    try {
+      if (file.size > MAX_IMAGE_SIZE) {
+        throw new ValidationError('Image size should be less than 5MB', 'image');
       }
+
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        throw new ValidationError('Only JPEG, PNG, and GIF images are allowed', 'image');
+      }
+
       setSelectedFile(file);
       setShowCropper(true);
+      clearErrors();
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        setFieldError(error.field || 'image', error.message);
+      } else {
+        setError('Failed to process image. Please try again.');
+      }
     }
   };
 
   const handleCroppedImage = (croppedImage: string) => {
     setImagePreview(croppedImage);
     setShowCropper(false);
-    setError('');
+    clearErrors();
+  };
+
+  const handleImageError = (error: string) => {
+    setFieldError('image', error);
+    setShowCropper(false);
   };
 
   const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,17 +202,22 @@ function ProjectForm() {
     if (value.endsWith(',')) {
       const newTag = value.slice(0, -1).trim();
       if (newTag && !tags.includes(newTag)) {
-        if (tags.length >= 5) {
-          setError('Maximum 5 tags allowed');
-          return;
+        try {
+          if (tags.length >= MAX_TAGS) {
+            throw new ValidationError(`Maximum ${MAX_TAGS} tags allowed`, 'tags');
+          }
+          setTags([...tags, newTag]);
+          setTagInput('');
+          clearErrors();
+        } catch (error) {
+          if (error instanceof ValidationError) {
+            setFieldError(error.field || 'tags', error.message);
+          }
         }
-        setTags([...tags, newTag]);
-        setTagInput('');
       }
     } else {
       setTagInput(value);
     }
-    setError('');
   };
 
   const handleTagInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -110,21 +225,29 @@ function ProjectForm() {
       e.preventDefault();
       const newTag = tagInput.trim();
       if (newTag && !tags.includes(newTag)) {
-        if (tags.length >= 5) {
-          setError('Maximum 5 tags allowed');
-          return;
+        try {
+          if (tags.length >= MAX_TAGS) {
+            throw new ValidationError(`Maximum ${MAX_TAGS} tags allowed`, 'tags');
+          }
+          setTags([...tags, newTag]);
+          setTagInput('');
+          clearErrors();
+        } catch (error) {
+          if (error instanceof ValidationError) {
+            setFieldError(error.field || 'tags', error.message);
+          }
         }
-        setTags([...tags, newTag]);
-        setTagInput('');
       }
     } else if (e.key === 'Backspace' && !tagInput) {
       e.preventDefault();
       setTags(tags.slice(0, -1));
+      clearErrors();
     }
   };
 
   const handleTagDelete = (tagToDelete: string) => {
     setTags(tags.filter(tag => tag !== tagToDelete));
+    clearErrors();
   };
 
   const handleSkillInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -132,17 +255,22 @@ function ProjectForm() {
     if (value.endsWith(',')) {
       const newSkill = value.slice(0, -1).trim();
       if (newSkill && !skills.includes(newSkill)) {
-        if (skills.length >= 5) {
-          setError('Maximum 5 skills allowed');
-          return;
+        try {
+          if (skills.length >= MAX_SKILLS) {
+            throw new ValidationError(`Maximum ${MAX_SKILLS} skills allowed`, 'skills');
+          }
+          setSkills([...skills, newSkill]);
+          setSkillInput('');
+          clearErrors();
+        } catch (error) {
+          if (error instanceof ValidationError) {
+            setFieldError(error.field || 'skills', error.message);
+          }
         }
-        setSkills([...skills, newSkill]);
-        setSkillInput('');
       }
     } else {
       setSkillInput(value);
     }
-    setError('');
   };
 
   const handleSkillInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -150,54 +278,51 @@ function ProjectForm() {
       e.preventDefault();
       const newSkill = skillInput.trim();
       if (newSkill && !skills.includes(newSkill)) {
-        if (skills.length >= 5) {
-          setError('Maximum 5 skills allowed');
-          return;
+        try {
+          if (skills.length >= MAX_SKILLS) {
+            throw new ValidationError(`Maximum ${MAX_SKILLS} skills allowed`, 'skills');
+          }
+          setSkills([...skills, newSkill]);
+          setSkillInput('');
+          clearErrors();
+        } catch (error) {
+          if (error instanceof ValidationError) {
+            setFieldError(error.field || 'skills', error.message);
+          }
         }
-        setSkills([...skills, newSkill]);
-        setSkillInput('');
       }
     } else if (e.key === 'Backspace' && !skillInput) {
       e.preventDefault();
       setSkills(skills.slice(0, -1));
+      clearErrors();
     }
   };
 
   const handleSkillDelete = (skillToDelete: string) => {
     setSkills(skills.filter(skill => skill !== skillToDelete));
+    clearErrors();
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError('');
+    clearErrors();
     setSuccess('');
     setLoading(true);
 
     try {
       const formData = new FormData(e.currentTarget);
-      const title = formData.get('title') as string;
-      const description = formData.get('description') as string;
-      const category = formData.get('category') as 'product' | 'software' | 'content';
-
-      // Validate title length
-      if (title.length > 50) {
-        throw new Error('Title must be 50 characters or less');
-      }
-
-      // Validate description length
-      if (description.length > 300) {
-        throw new Error('Description must be 300 characters or less');
-      }
-
-      const projectData = {
-        title,
-        description,
-        category,
-        link: formData.get('link'),
-        image: imagePreview || getRandomPlaceholder(category),
+      const projectData: ProjectData = {
+        title: (formData.get('title') as string).trim(),
+        description: (formData.get('description') as string).trim(),
+        category: formData.get('category') as Category,
+        link: (formData.get('link') as string)?.trim() || undefined,
+        image: imagePreview || getRandomPlaceholder(formData.get('category') as Category),
         tags,
         skills,
       };
+
+      // Validate project data
+      validateProjectData(projectData);
 
       const url = isEditMode ? `/api/admin/project/${projectId}` : '/api/admin/project';
       const method = isEditMode ? 'PUT' : 'POST';
@@ -213,7 +338,10 @@ function ProjectForm() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || `Failed to ${isEditMode ? 'update' : 'add'} project`);
+        if (response.status === 401) {
+          throw new NetworkError('Your session has expired. Please log in again.');
+        }
+        throw new NetworkError(data.message || `Failed to ${isEditMode ? 'update' : 'add'} project`);
       }
 
       setSuccess(`Project ${isEditMode ? 'updated' : 'added'} successfully`);
@@ -225,10 +353,19 @@ function ProjectForm() {
         setSkills([]);
       }
       
-      router.push('/admin/dashboard');
-    } catch (error: Error | unknown) {
-      const errorMessage = error instanceof Error ? error.message : `An error occurred while ${isEditMode ? 'updating' : 'saving'} the project`;
-      setError(errorMessage);
+      // Redirect after a short delay to show success message
+      setTimeout(() => {
+        router.push('/admin/dashboard');
+      }, 1500);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        setFieldError(error.field || 'form', error.message);
+      } else if (error instanceof NetworkError) {
+        setError(error.message);
+      } else {
+        setError(`An error occurred while ${isEditMode ? 'updating' : 'saving'} the project. Please try again.`);
+      }
+      console.error('Error submitting project:', error);
     } finally {
       setLoading(false);
     }
@@ -267,28 +404,36 @@ function ProjectForm() {
 
         <div>
           <label htmlFor="category" className="block text-sm font-medium text-[#e2e8f0] mb-1">
-            Category
+            Category <span className="text-red-400">*</span>
           </label>
           <select
             id="category"
             name="category"
             required
-            value={initialCategory}
-            onChange={(e) => setInitialCategory(e.target.value)}
-            className="relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+            onChange={() => clearErrors()}
+            className={`relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ${
+              fieldErrors.category ? 'ring-red-500' : 'ring-gray-700'
+            } focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6`}
+            defaultValue={initialCategory || ''}
           >
-            <option value="">Select a category</option>
+            <option value="" disabled>Select a category</option>
             <option value="product">Product</option>
             <option value="software">Software</option>
             <option value="content">Content</option>
+            <option value="innovation">Innovation</option>
           </select>
+          {fieldErrors.category && (
+            <p className="mt-1 text-sm text-red-400">{fieldErrors.category}</p>
+          )}
         </div>
 
         <div>
           <label htmlFor="image" className="block text-sm font-medium text-[#e2e8f0] mb-1">
             Project Image <span className="text-[#94a3b8]">(Square image recommended)</span>
           </label>
-          <div className="mt-1 flex justify-center rounded-lg border border-dashed border-gray-700 px-6 py-10">
+          <div className={`mt-1 flex justify-center rounded-lg border border-dashed ${
+            fieldErrors.image ? 'border-red-500' : 'border-gray-700'
+          } px-6 py-10`}>
             <div className="text-center">
               {imagePreview ? (
                 <div className="relative">
@@ -301,7 +446,10 @@ function ProjectForm() {
                   />
                   <button
                     type="button"
-                    onClick={() => setImagePreview(null)}
+                    onClick={() => {
+                      setImagePreview(null);
+                      clearErrors();
+                    }}
                     className="absolute -top-2 -right-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
                   >
                     ×
@@ -332,41 +480,58 @@ function ProjectForm() {
               )}
             </div>
           </div>
+          {fieldErrors.image && (
+            <p className="mt-1 text-sm text-red-400">{fieldErrors.image}</p>
+          )}
         </div>
 
         <div>
           <label htmlFor="title" className="block text-sm font-medium text-[#e2e8f0] mb-1">
-            Title <span className="text-[#94a3b8]">(max 50 characters)</span>
+            Title <span className="text-red-400">*</span>{' '}
+            <span className="text-[#94a3b8]">(max {MAX_TITLE_LENGTH} characters)</span>
           </label>
           <input
             id="title"
             name="title"
             type="text"
             required
-            maxLength={50}
-            className="relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+            maxLength={MAX_TITLE_LENGTH}
+            onChange={() => clearErrors()}
+            className={`relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ${
+              fieldErrors.title ? 'ring-red-500' : 'ring-gray-700'
+            } focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6`}
             placeholder="Enter project title"
           />
+          {fieldErrors.title && (
+            <p className="mt-1 text-sm text-red-400">{fieldErrors.title}</p>
+          )}
         </div>
 
         <div>
           <label htmlFor="description" className="block text-sm font-medium text-[#e2e8f0] mb-1">
-            Description <span className="text-[#94a3b8]">(max 300 characters)</span>
+            Description <span className="text-red-400">*</span>{' '}
+            <span className="text-[#94a3b8]">(max {MAX_DESCRIPTION_LENGTH} characters)</span>
           </label>
           <textarea
             id="description"
             name="description"
             required
-            maxLength={300}
+            maxLength={MAX_DESCRIPTION_LENGTH}
             rows={4}
-            className="relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+            onChange={() => clearErrors()}
+            className={`relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ${
+              fieldErrors.description ? 'ring-red-500' : 'ring-gray-700'
+            } focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6`}
             placeholder="Describe your project"
           />
+          {fieldErrors.description && (
+            <p className="mt-1 text-sm text-red-400">{fieldErrors.description}</p>
+          )}
         </div>
 
         <div>
           <label htmlFor="tags" className="block text-sm font-medium text-[#e2e8f0] mb-1">
-            Tags <span className="text-[#94a3b8]">(max 5, press comma or enter to add)</span>
+            Tags <span className="text-[#94a3b8]">(max {MAX_TAGS}, press comma or enter to add)</span>
           </label>
           <input
             id="tags"
@@ -375,9 +540,14 @@ function ProjectForm() {
             value={tagInput}
             onChange={handleTagInputChange}
             onKeyDown={handleTagInputKeyDown}
-            className="relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+            className={`relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ${
+              fieldErrors.tags ? 'ring-red-500' : 'ring-gray-700'
+            } focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6`}
             placeholder="Type and press comma or enter to add tags..."
           />
+          {fieldErrors.tags && (
+            <p className="mt-1 text-sm text-red-400">{fieldErrors.tags}</p>
+          )}
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {tags.map((tag, index) => (
@@ -401,7 +571,7 @@ function ProjectForm() {
 
         <div>
           <label htmlFor="skills" className="block text-sm font-medium text-[#e2e8f0] mb-1">
-            Skills/Tech <span className="text-[#94a3b8]">(max 5, press comma or enter to add)</span>
+            Skills/Tech <span className="text-[#94a3b8]">(max {MAX_SKILLS}, press comma or enter to add)</span>
           </label>
           <input
             id="skills"
@@ -410,9 +580,14 @@ function ProjectForm() {
             value={skillInput}
             onChange={handleSkillInputChange}
             onKeyDown={handleSkillInputKeyDown}
-            className="relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+            className={`relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ${
+              fieldErrors.skills ? 'ring-red-500' : 'ring-gray-700'
+            } focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6`}
             placeholder="Type and press comma or enter to add skills..."
           />
+          {fieldErrors.skills && (
+            <p className="mt-1 text-sm text-red-400">{fieldErrors.skills}</p>
+          )}
           {skills.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {skills.map((skill, index) => (
@@ -442,9 +617,15 @@ function ProjectForm() {
             id="link"
             name="link"
             type="url"
-            className="relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+            onChange={() => clearErrors()}
+            className={`relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ${
+              fieldErrors.link ? 'ring-red-500' : 'ring-gray-700'
+            } focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6`}
             placeholder="https://..."
           />
+          {fieldErrors.link && (
+            <p className="mt-1 text-sm text-red-400">{fieldErrors.link}</p>
+          )}
         </div>
 
         <div>
@@ -463,6 +644,7 @@ function ProjectForm() {
           imageFile={selectedFile}
           onCroppedImage={handleCroppedImage}
           onCancel={() => setShowCropper(false)}
+          onError={handleImageError}
         />
       )}
     </div>
@@ -471,7 +653,14 @@ function ProjectForm() {
 
 export default function ProjectFormPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[200px] p-6">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading project form...</p>
+        </div>
+      </div>
+    }>
       <ProjectForm />
     </Suspense>
   );

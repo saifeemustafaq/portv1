@@ -36,22 +36,16 @@ export async function middleware(request: NextRequest) {
     console.log('Middleware - Token retrieved:', token ? 'yes' : 'no');
 
     // Redirect to login if trying to access a protected route without being authenticated
-    if (!token) {
+    if (!token || !token.user) {
       console.log('Middleware - No token found, redirecting to login');
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
 
     // For API routes, return 401 instead of redirecting
     if (path.startsWith('/api/')) {
-      if (!token.sessionId || !token.user?.sessionId || token.sessionId !== token.user.sessionId) {
+      if (!token.user.email) {
         console.log('Middleware - Invalid session for API route');
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    } else {
-      // For non-API routes, redirect to login if session is invalid
-      if (!token.sessionId || !token.user?.sessionId || token.sessionId !== token.user.sessionId) {
-        console.log('Middleware - Invalid session for protected route, redirecting to login');
-        return NextResponse.redirect(new URL('/admin/login', request.url));
       }
     }
 
@@ -60,11 +54,22 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   } catch (error) {
     console.error('Middleware - Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
+    
     // For API routes, return 401 instead of redirecting
     if (path.startsWith('/api/')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ 
+        error: 'Unauthorized',
+        message: errorMessage,
+        code: 'AUTH_ERROR'
+      }, { status: 401 });
     }
-    return NextResponse.redirect(new URL('/admin/login', request.url));
+    
+    // For non-API routes, redirect to login with error in searchParams
+    const loginUrl = new URL('/admin/login', request.url);
+    loginUrl.searchParams.set('error', 'auth_required');
+    loginUrl.searchParams.set('message', errorMessage);
+    return NextResponse.redirect(loginUrl);
   }
 }
 

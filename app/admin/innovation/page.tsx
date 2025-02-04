@@ -11,7 +11,7 @@ interface Project {
   _id: string;
   title: string;
   description: string;
-  category: 'product' | 'software' | 'content';
+  category: 'product' | 'software' | 'content' | 'innovation';
   image?: string;
   link?: string;
   tags?: string[];
@@ -25,16 +25,16 @@ interface Project {
   };
 }
 
-export default function ContentPage() {
+export default function InnovationPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
 
   const fetchProjects = useCallback(async () => {
     try {
-      const response = await fetch('/api/admin/project?category=content', {
+      const response = await fetch('/api/admin/project?category=innovation', {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -130,10 +130,10 @@ export default function ContentPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white serif">
-            Content Projects
+            Innovation Projects
           </h1>
           <p className="mt-2 text-[#94a3b8]">
-            Manage your content and media projects
+            Manage your innovation and research projects
           </p>
         </div>
         <Link
@@ -245,7 +245,7 @@ export default function ContentPage() {
 
         {projects.length === 0 && !error && (
           <div className="col-span-full text-center py-12 bg-[#1a1f2e] rounded-lg border border-gray-800">
-            <p className="text-[#94a3b8]">No content projects found.</p>
+            <p className="text-[#94a3b8]">No innovation projects found.</p>
             <Link
               href="/admin/project/add"
               className="inline-flex items-center mt-4 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { RiAddCircleLine, RiEditLine, RiDeleteBinLine } from 'react-icons/ri';
@@ -29,31 +29,20 @@ export default function ProductPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/admin/login');
-      return;
-    }
-    
-    if (status === 'authenticated') {
-      fetchProjects();
-    }
-  }, [status, router]);
-
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/project?category=product', {
-        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       });
       
       if (response.status === 401) {
-        router.push('/admin/login');
+        router.replace('/admin/login');
         return;
       }
 
@@ -64,13 +53,31 @@ export default function ProductPage() {
       }
 
       setProjects(data.projects);
+      setError('');
     } catch (error: Error | unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred while fetching projects';
       setError(errorMessage);
+      console.error('Error fetching projects:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    if (status === 'loading') {
+      return;
+    }
+
+    if (status === 'unauthenticated') {
+      router.replace('/admin/login');
+      return;
+    }
+
+    if (status === 'authenticated') {
+      setLoading(true);
+      fetchProjects();
+    }
+  }, [status, router, fetchProjects]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this project?')) {

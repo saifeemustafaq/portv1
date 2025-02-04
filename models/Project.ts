@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 export interface IProject extends mongoose.Document {
   title: string;
   description: string;
-  category: 'product' | 'software' | 'content';
+  category: 'product' | 'software' | 'content' | 'innovation';
   image?: string;
   link?: string;
   tags?: string[];
@@ -27,7 +27,7 @@ const projectSchema = new mongoose.Schema<IProject>({
   category: {
     type: String,
     required: true,
-    enum: ['product', 'software', 'content'],
+    enum: ['product', 'software', 'content', 'innovation'],
   },
   image: {
     type: String,

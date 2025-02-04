@@ -3,9 +3,16 @@
 import { useState, useEffect } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { logClientError, logClientAuth } from '@/app/utils/clientLogger';
+
+interface ValidationErrors {
+  username?: string;
+  password?: string;
+  general?: string;
+}
 
 export default function LoginForm() {
-  const [{ message: errorMessage }, setError] = useState<{ message: string | null }>({ message: null });
+  const [errors, setErrors] = useState<ValidationErrors>({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { data: session, status, update } = useSession();
@@ -17,17 +24,35 @@ export default function LoginForm() {
     }
   }, [session, status, router]);
 
+  const validateForm = (username: string, password: string): boolean => {
+    const newErrors: ValidationErrors = {};
+
+    // Username validation
+    if (!username) {
+      newErrors.username = 'Username is required';
+    } else if (username.length < 3) {
+      newErrors.username = 'Username must be at least 3 characters';
+    }
+
+    // Password validation
+    if (!password) {
+      newErrors.password = 'Password is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError({ message: null });
     setLoading(true);
+    setErrors({});
 
     const formData = new FormData(e.currentTarget);
     const username = formData.get('username') as string;
     const password = formData.get('password') as string;
 
-    if (!username || !password) {
-      setError({ message: 'Please enter both username and password' });
+    if (!validateForm(username, password)) {
       setLoading(false);
       return;
     }
@@ -37,51 +62,25 @@ export default function LoginForm() {
         username,
         password,
         redirect: false,
-        callbackUrl: '/admin/dashboard',
       });
 
       if (result?.error) {
-        setError({ message: result.error });
-        console.error('Authentication error:', result.error);
-        return;
+        logClientAuth('Login failed', { error: result.error })
+          .catch(error => console.error('Failed to log auth error:', error));
+          
+        setErrors({ general: 'Invalid username or password' });
+      } else {
+        logClientAuth('Login successful')
+          .catch(error => console.error('Failed to log auth success:', error));
+          
+        router.push('/admin/dashboard');
       }
-
-      if (!result?.ok) {
-        setError({ message: 'An unexpected error occurred during sign in' });
-        console.error('Sign in failed:', result);
-        return;
+    } catch (error) {
+      if (error instanceof Error) {
+        logClientError('auth', 'Login error', error)
+          .catch(loggingError => console.error('Failed to log error:', loggingError));
       }
-
-      // Wait briefly for session to establish
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Force session update
-      await update();
-      
-      try {
-        const response = await fetch('/api/auth/session');
-        if (!response.ok) {
-          throw new Error('Failed to fetch session');
-        }
-        
-        const sessionData = await response.json();
-        
-        if (sessionData?.user) {
-          router.push('/admin/dashboard');
-        } else {
-          throw new Error('Session not established');
-        }
-      } catch (sessionError) {
-        console.error('Session verification failed:', sessionError);
-        setError({ message: 'Failed to establish session. Please try again.' });
-      }
-    } catch (err) {
-      console.error('Login error:', err);
-      setError({ 
-        message: err instanceof Error 
-          ? `Login failed: ${err.message}` 
-          : 'An unexpected error occurred. Please try again.'
-      });
+      setErrors({ general: 'An unexpected error occurred' });
     } finally {
       setLoading(false);
     }
@@ -89,9 +88,9 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-      {errorMessage && (
+      {errors.general && (
         <div className="bg-red-500/10 text-red-400 text-sm text-center py-2 px-4 rounded-lg border border-red-500/20">
-          {errorMessage}
+          {errors.general}
         </div>
       )}
       <div className="space-y-4 rounded-md">
@@ -104,9 +103,14 @@ export default function LoginForm() {
             name="username"
             type="text"
             required
-            className="appearance-none relative block w-full px-3 py-2 border border-gray-700 bg-gray-900 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className={`appearance-none relative block w-full px-3 py-2 border ${
+              errors.username ? 'border-red-500' : 'border-gray-700'
+            } bg-gray-900 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
             disabled={loading}
           />
+          {errors.username && (
+            <p className="mt-1 text-sm text-red-400">{errors.username}</p>
+          )}
         </div>
         <div>
           <label htmlFor="password" className="block text-sm font-medium text-gray-200 mb-1">
@@ -117,12 +121,16 @@ export default function LoginForm() {
             name="password"
             type="password"
             required
-            className="appearance-none relative block w-full px-3 py-2 border border-gray-700 bg-gray-900 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className={`appearance-none relative block w-full px-3 py-2 border ${
+              errors.password ? 'border-red-500' : 'border-gray-700'
+            } bg-gray-900 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
             disabled={loading}
           />
+          {errors.password && (
+            <p className="mt-1 text-sm text-red-400">{errors.password}</p>
+          )}
         </div>
       </div>
-
       <button
         type="submit"
         disabled={loading}

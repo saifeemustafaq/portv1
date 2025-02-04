@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
@@ -29,18 +29,10 @@ export default function SoftwarePage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.replace('/admin/login');
-    } else if (status === 'authenticated') {
-      fetchProjects();
-    }
-  }, [status, router]);
-
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/project?category=software', {
         headers: {
@@ -69,7 +61,23 @@ export default function SoftwarePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    if (status === 'loading') {
+      return;
+    }
+
+    if (status === 'unauthenticated') {
+      router.replace('/admin/login');
+      return;
+    }
+
+    if (status === 'authenticated') {
+      setLoading(true);
+      fetchProjects();
+    }
+  }, [status, router, fetchProjects]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this project?')) {

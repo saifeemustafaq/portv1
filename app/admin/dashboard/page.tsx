@@ -1,11 +1,8 @@
-import { Metadata } from 'next';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'Admin Dashboard',
-  description: 'Admin panel dashboard',
-};
+import { ErrorBoundary } from '@/app/components/ErrorBoundary';
 
-export default function DashboardPage() {
+function DashboardContent() {
   return (
     <div className="space-y-6">
       <div>
@@ -41,5 +38,13 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <ErrorBoundary>
+      <DashboardContent />
+    </ErrorBoundary>
   );
 } 
