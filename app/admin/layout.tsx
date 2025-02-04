@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
-import { RiDashboardLine, RiShoppingBag2Line, RiFileTextLine, RiCodeLine, RiSettings4Line, RiLogoutBoxLine, RiLockPasswordLine, RiAddCircleLine } from 'react-icons/ri';
+import { RiDashboardLine, RiShoppingBag2Line, RiFileTextLine, RiCodeLine, RiSettings4Line, RiLogoutBoxLine, RiLockPasswordLine, RiAddCircleLine, RiFileHistoryLine } from 'react-icons/ri';
 
 const navigation = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: RiDashboardLine },
@@ -11,6 +11,7 @@ const navigation = [
   { name: 'Product', href: '/admin/product', icon: RiShoppingBag2Line },
   { name: 'Content', href: '/admin/content', icon: RiFileTextLine },
   { name: 'Software', href: '/admin/software', icon: RiCodeLine },
+  { name: 'Log Monitor', href: '/admin/logs', icon: RiFileHistoryLine },
   { name: 'Settings', href: '/admin/settings', icon: RiSettings4Line },
 ];
 

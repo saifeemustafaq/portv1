@@ -8,7 +8,7 @@ export default function LoginForm() {
   const [{ message: errorMessage }, setError] = useState<{ message: string | null }>({ message: null });
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
 
   // Monitor session status changes
   useEffect(() => {
@@ -16,7 +16,7 @@ export default function LoginForm() {
     console.log('Session data:', session);
     
     if (status === 'authenticated' && session) {
-      console.log('Redirecting to dashboard...');
+      console.log('Session authenticated, attempting redirect...');
       router.replace('/admin/dashboard');
     }
   }, [session, status, router]);
@@ -36,7 +36,6 @@ export default function LoginForm() {
         username,
         password,
         redirect: false,
-        callbackUrl: '/admin/dashboard'
       });
 
       console.log('Sign in result:', result);
@@ -48,11 +47,16 @@ export default function LoginForm() {
         setError({ message: 'An unexpected error occurred' });
         console.error('Unexpected result:', result);
       } else {
-        // Force a session check
-        console.log('Login successful, checking session...');
+        // Wait briefly for session to establish
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Force session update
+        await update();
+        
+        // Check session
         const response = await fetch('/api/auth/session');
         const sessionData = await response.json();
-        console.log('Session data:', sessionData);
+        console.log('Session data after update:', sessionData);
         
         if (sessionData?.user) {
           console.log('Session established, redirecting...');
@@ -69,21 +73,6 @@ export default function LoginForm() {
       setLoading(false);
     }
   };
-
-  // If we're already authenticated, redirect to dashboard
-  useEffect(() => {
-    if (status === 'authenticated') {
-      router.replace('/admin/dashboard');
-    }
-  }, [status, router]);
-
-  if (status === 'loading') {
-    return (
-      <div className="flex items-center justify-center">
-        <div className="text-blue-500">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-6">
@@ -123,9 +112,9 @@ export default function LoginForm() {
 
       <button
         type="submit"
-        disabled={loading || status !== 'unauthenticated'}
+        disabled={loading}
         className={`relative w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white ${
-          loading || status !== 'unauthenticated'
+          loading
             ? 'bg-blue-600/50 cursor-not-allowed' 
             : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
         }`}

@@ -58,47 +58,39 @@ const handler = NextAuth({
   },
   session: {
     strategy: 'jwt',
-    maxAge: 2 * 60 * 60, // 2 hours
+    maxAge: 24 * 60 * 60, // 24 hours
   },
   callbacks: {
-    async jwt({ token, user }) {
-      // On sign in, update the token with new user data
-      if (user) {
-        token.user = user as CustomUser;
-        token.loginTime = Date.now();
-        token.sessionId = (user as CustomUser).sessionId;
-        return token;
-      }
-
-      // For all requests (not just updates), validate the session
-      const currentSessionId = (token.user as CustomUser)?.sessionId;
-      if (!currentSessionId || currentSessionId !== token.sessionId) {
-        return null as unknown as JWT;
+    async jwt({ token, user, trigger }) {
+      if (trigger === 'signIn' && user) {
+        // On sign in, update the token with new user data
+        return {
+          ...token,
+          user,
+          loginTime: Date.now(),
+          sessionId: (user as CustomUser).sessionId,
+        };
       }
       
-      // Force re-login after 8 hours regardless of activity
-      const loginTime = token.loginTime as number;
-      if (loginTime && (Date.now() - loginTime) > 8 * 60 * 60 * 1000) {
-        return null as unknown as JWT;
-      }
-      
+      // For subsequent requests, just return the token
       return token;
     },
     async session({ session, token }) {
-      if (token?.user) {
-        session.user = token.user as CustomUser;
-      }
+      // Update session with user data from token
+      session.user = token.user as CustomUser;
+      session.loginTime = token.loginTime;
+      session.sessionId = token.sessionId;
       return session;
     }
   },
   cookies: {
     sessionToken: {
-      name: `__Secure-next-auth.session-token`,
+      name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.session-token' : 'next-auth.session-token',
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: true
+        secure: process.env.NODE_ENV === 'production'
       }
     }
   }
