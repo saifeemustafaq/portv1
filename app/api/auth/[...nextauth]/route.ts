@@ -2,8 +2,10 @@ import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import connectDB from '@/lib/db';
 import Admin from '@/models/Admin';
+import Log from '@/models/Log';
 import { JWT } from 'next-auth/jwt';
 import crypto from 'crypto';
+import { headers } from 'next/headers';
 
 interface CustomUser {
   id: string;
@@ -21,35 +23,107 @@ const handler = NextAuth({
         username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" }
       },
-      async authorize(credentials): Promise<CustomUser | null> {
+      async authorize(credentials, req): Promise<CustomUser | null> {
         if (!credentials?.username || !credentials?.password) {
           throw new Error('Please enter username and password');
         }
 
         await connectDB();
         
-        const admin = await Admin.findOne({ username: credentials.username });
-        
-        if (!admin) {
-          throw new Error('Invalid credentials');
+        const headersList = headers();
+        const ip = headersList.get('x-forwarded-for') || 'unknown';
+        const userAgent = headersList.get('user-agent') || 'unknown';
+
+        try {
+          const admin = await Admin.findOne({ username: credentials.username });
+          
+          if (!admin) {
+            // Log failed login attempt - user not found
+            await Log.create({
+              timestamp: new Date(),
+              level: 'warn',
+              category: 'auth',
+              message: 'Failed login attempt - user not found',
+              details: {
+                attemptedUsername: credentials.username,
+                attemptedPassword: '***' // Never log actual passwords
+              },
+              ip,
+              userAgent,
+              path: '/api/auth/signin',
+              method: 'POST'
+            });
+            throw new Error('Invalid credentials');
+          }
+
+          const isValid = await admin.comparePassword(credentials.password);
+          
+          if (!isValid) {
+            // Log failed login attempt - wrong password
+            await Log.create({
+              timestamp: new Date(),
+              level: 'warn',
+              category: 'auth',
+              message: 'Failed login attempt - invalid password',
+              details: {
+                username: credentials.username,
+                attemptedPassword: '***' // Never log actual passwords
+              },
+              ip,
+              userAgent,
+              path: '/api/auth/signin',
+              method: 'POST'
+            });
+            throw new Error('Invalid credentials');
+          }
+
+          // Generate a unique session ID for this login
+          const sessionId = crypto.randomBytes(32).toString('hex');
+
+          // Log successful login
+          await Log.create({
+            timestamp: new Date(),
+            level: 'info',
+            category: 'auth',
+            message: 'Successful login',
+            details: {
+              username: credentials.username
+            },
+            userId: admin._id.toString(),
+            username: admin.username,
+            ip,
+            userAgent,
+            path: '/api/auth/signin',
+            method: 'POST'
+          });
+
+          return {
+            id: admin._id.toString(),
+            name: admin.username,
+            email: admin.username,
+            loginTime: Date.now(),
+            sessionId,
+          };
+        } catch (error) {
+          // Log unexpected errors
+          if (error instanceof Error && error.message !== 'Invalid credentials') {
+            await Log.create({
+              timestamp: new Date(),
+              level: 'error',
+              category: 'auth',
+              message: 'Authentication error',
+              details: {
+                error: error.message,
+                username: credentials.username
+              },
+              ip,
+              userAgent,
+              path: '/api/auth/signin',
+              method: 'POST'
+            });
+          }
+          throw error;
         }
-
-        const isValid = await admin.comparePassword(credentials.password);
-        
-        if (!isValid) {
-          throw new Error('Invalid credentials');
-        }
-
-        // Generate a unique session ID for this login
-        const sessionId = crypto.randomBytes(32).toString('hex');
-
-        return {
-          id: admin._id.toString(),
-          name: admin.username,
-          email: admin.username,
-          loginTime: Date.now(),
-          sessionId,
-        };
       }
     })
   ],

@@ -12,11 +12,7 @@ export default function LoginForm() {
 
   // Monitor session status changes
   useEffect(() => {
-    console.log('Session status:', status);
-    console.log('Session data:', session);
-    
     if (status === 'authenticated' && session) {
-      console.log('Session authenticated, attempting redirect...');
       router.replace('/admin/dashboard');
     }
   }, [session, status, router]);
@@ -31,20 +27,18 @@ export default function LoginForm() {
     const password = formData.get('password') as string;
 
     try {
-      console.log('Attempting sign in...');
       const result = await signIn('credentials', {
         username,
         password,
         redirect: false,
       });
 
-      console.log('Sign in result:', result);
-
       if (result?.error) {
+        // Just set the error message for the user without console.error
         setError({ message: result.error });
-        console.error('Login error:', result.error);
       } else if (!result?.ok) {
         setError({ message: 'An unexpected error occurred' });
+        // Keep this console.error as it's an actual unexpected error
         console.error('Unexpected result:', result);
       } else {
         // Wait briefly for session to establish
@@ -56,10 +50,8 @@ export default function LoginForm() {
         // Check session
         const response = await fetch('/api/auth/session');
         const sessionData = await response.json();
-        console.log('Session data after update:', sessionData);
         
         if (sessionData?.user) {
-          console.log('Session established, redirecting...');
           router.push('/admin/dashboard');
         } else {
           console.error('Session not established after successful login');

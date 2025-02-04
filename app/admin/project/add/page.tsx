@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { RiUploadCloud2Line } from 'react-icons/ri';
+import { useState, useRef } from 'react';
+import { RiUploadCloud2Line, RiCloseLine } from 'react-icons/ri';
 import ImageCropper from '../../../components/ImageCropper';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { getRandomPlaceholder } from '../../../utils/placeholderIcons';
 
 export default function AddProjectPage() {
   const [loading, setLoading] = useState(false);
@@ -13,8 +14,11 @@ export default function AddProjectPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [skillInput, setSkillInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showCropper, setShowCropper] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,26 +39,84 @@ export default function AddProjectPage() {
     setError('');
   };
 
-  const handleTagsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    const tagArray = value.split(',').map(tag => tag.trim()).filter(Boolean);
-    if (tagArray.length > 5) {
-      setError('Maximum 5 tags allowed');
-      return;
+    if (value.endsWith(',')) {
+      const newTag = value.slice(0, -1).trim();
+      if (newTag && !tags.includes(newTag)) {
+        if (tags.length >= 5) {
+          setError('Maximum 5 tags allowed');
+          return;
+        }
+        setTags([...tags, newTag]);
+        setTagInput('');
+      }
+    } else {
+      setTagInput(value);
     }
-    setTags(tagArray);
     setError('');
   };
 
-  const handleSkillsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const skillArray = value.split(',').map(skill => skill.trim()).filter(Boolean);
-    if (skillArray.length > 5) {
-      setError('Maximum 5 skills allowed');
-      return;
+  const handleTagInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const newTag = tagInput.trim();
+      if (newTag && !tags.includes(newTag)) {
+        if (tags.length >= 5) {
+          setError('Maximum 5 tags allowed');
+          return;
+        }
+        setTags([...tags, newTag]);
+        setTagInput('');
+      }
+    } else if (e.key === 'Backspace' && !tagInput) {
+      e.preventDefault();
+      setTags(tags.slice(0, -1));
     }
-    setSkills(skillArray);
+  };
+
+  const handleTagDelete = (tagToDelete: string) => {
+    setTags(tags.filter(tag => tag !== tagToDelete));
+  };
+
+  const handleSkillInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value.endsWith(',')) {
+      const newSkill = value.slice(0, -1).trim();
+      if (newSkill && !skills.includes(newSkill)) {
+        if (skills.length >= 5) {
+          setError('Maximum 5 skills allowed');
+          return;
+        }
+        setSkills([...skills, newSkill]);
+        setSkillInput('');
+      }
+    } else {
+      setSkillInput(value);
+    }
     setError('');
+  };
+
+  const handleSkillInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const newSkill = skillInput.trim();
+      if (newSkill && !skills.includes(newSkill)) {
+        if (skills.length >= 5) {
+          setError('Maximum 5 skills allowed');
+          return;
+        }
+        setSkills([...skills, newSkill]);
+        setSkillInput('');
+      }
+    } else if (e.key === 'Backspace' && !skillInput) {
+      e.preventDefault();
+      setSkills(skills.slice(0, -1));
+    }
+  };
+
+  const handleSkillDelete = (skillToDelete: string) => {
+    setSkills(skills.filter(skill => skill !== skillToDelete));
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -67,6 +129,7 @@ export default function AddProjectPage() {
       const formData = new FormData(e.currentTarget);
       const title = formData.get('title') as string;
       const description = formData.get('description') as string;
+      const category = formData.get('category') as 'product' | 'software' | 'content';
 
       // Validate title length
       if (title.length > 50) {
@@ -81,9 +144,9 @@ export default function AddProjectPage() {
       const projectData = {
         title,
         description,
-        category: formData.get('category'),
+        category,
         link: formData.get('link'),
-        image: imagePreview,
+        image: imagePreview || getRandomPlaceholder(category),
         tags,
         skills,
       };
@@ -103,7 +166,7 @@ export default function AddProjectPage() {
       }
 
       setSuccess('Project added successfully');
-      e.currentTarget.reset();
+      formRef.current?.reset();
       setImagePreview(null);
       setTags([]);
       setSkills([]);
@@ -111,6 +174,7 @@ export default function AddProjectPage() {
     } catch (error: Error | unknown) {
       const errorMessage = error instanceof Error ? error.message : 'An error occurred while saving the project';
       setError(errorMessage);
+    } finally {
       setLoading(false);
     }
   };
@@ -126,7 +190,7 @@ export default function AddProjectPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
         {error && (
           <div className="bg-red-500/10 text-red-400 text-sm text-center py-2 px-4 rounded-lg border border-red-500/20">
             {error}
@@ -237,32 +301,72 @@ export default function AddProjectPage() {
 
         <div>
           <label htmlFor="tags" className="block text-sm font-medium text-[#e2e8f0] mb-1">
-            Tags <span className="text-[#94a3b8]">(max 5, comma-separated)</span>
+            Tags <span className="text-[#94a3b8]">(max 5, press comma or enter to add)</span>
           </label>
           <input
             id="tags"
             name="tags"
             type="text"
-            value={tags.join(', ')}
-            onChange={handleTagsChange}
+            value={tagInput}
+            onChange={handleTagInputChange}
+            onKeyDown={handleTagInputKeyDown}
             className="relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
-            placeholder="UI/UX, Design, Mobile, etc."
+            placeholder="Type and press comma or enter to add tags..."
           />
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {tags.map((tag, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-600/10 text-blue-400"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => handleTagDelete(tag)}
+                    className="ml-1 hover:text-blue-300"
+                  >
+                    <RiCloseLine className="h-4 w-4" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div>
           <label htmlFor="skills" className="block text-sm font-medium text-[#e2e8f0] mb-1">
-            Skills/Tech <span className="text-[#94a3b8]">(max 5, comma-separated)</span>
+            Skills/Tech <span className="text-[#94a3b8]">(max 5, press comma or enter to add)</span>
           </label>
           <input
             id="skills"
             name="skills"
             type="text"
-            value={skills.join(', ')}
-            onChange={handleSkillsChange}
+            value={skillInput}
+            onChange={handleSkillInputChange}
+            onKeyDown={handleSkillInputKeyDown}
             className="relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
-            placeholder="React, Node.js, MongoDB, etc."
+            placeholder="Type and press comma or enter to add skills..."
           />
+          {skills.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {skills.map((skill, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-600/10 text-green-400"
+                >
+                  {skill}
+                  <button
+                    type="button"
+                    onClick={() => handleSkillDelete(skill)}
+                    className="ml-1 hover:text-green-300"
+                  >
+                    <RiCloseLine className="h-4 w-4" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div>

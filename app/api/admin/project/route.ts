@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
 
-    const admin = await Admin.findOne({ email: session.user.email });
+    const admin = await Admin.findOne({ username: session.user.email });
     if (!admin) {
       return NextResponse.json({ message: 'Admin not found' }, { status: 404 });
     }

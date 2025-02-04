@@ -1,29 +1,62 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RiRefreshLine, RiDownloadLine, RiFilterLine } from 'react-icons/ri';
+import { RiRefreshLine, RiDownloadLine, RiFilterLine, RiCalendarLine } from 'react-icons/ri';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 interface LogEntry {
   timestamp: string;
   level: 'info' | 'warn' | 'error';
+  category: 'auth' | 'action' | 'system';
   message: string;
-  source?: string;
+  details: any;
+  userId?: string;
+  username?: string;
+  ip?: string;
+  userAgent?: string;
+  path?: string;
+  method?: string;
+}
+
+interface PaginationInfo {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export default function LogMonitorPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'info' | 'warn' | 'error'>('all');
+  const [level, setLevel] = useState<'all' | 'info' | 'warn' | 'error'>('all');
+  const [category, setCategory] = useState<'all' | 'auth' | 'action' | 'system'>('all');
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    total: 0,
+    page: 1,
+    limit: 50,
+    totalPages: 0
+  });
 
-  // Fetch logs function - to be implemented with actual API endpoint
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API call
-      const response = await fetch('/api/logs');
+      const params = new URLSearchParams();
+      if (level !== 'all') params.append('level', level);
+      if (category !== 'all') params.append('category', category);
+      if (startDate) params.append('from', startDate.toISOString());
+      if (endDate) params.append('to', endDate.toISOString());
+      params.append('page', pagination.page.toString());
+      params.append('limit', pagination.limit.toString());
+
+      const response = await fetch(`/api/logs?${params.toString()}`);
+      if (!response.ok) throw new Error('Failed to fetch logs');
       const data = await response.json();
-      setLogs(data);
+      setLogs(data.logs);
+      setPagination(data.pagination);
       setError(null);
     } catch (err) {
       setError('Failed to fetch logs. Please try again later.');
@@ -34,16 +67,23 @@ export default function LogMonitorPage() {
 
   useEffect(() => {
     fetchLogs();
-  }, []);
+  }, [level, category, startDate, endDate, pagination.page]);
 
   const handleRefresh = () => {
     fetchLogs();
   };
 
   const handleDownload = () => {
-    // TODO: Implement log download functionality
     const logText = logs
-      .map(log => `[${log.timestamp}] ${log.level.toUpperCase()}: ${log.message}`)
+      .map(log => {
+        const details = JSON.stringify(log.details, null, 2);
+        return `[${new Date(log.timestamp).toLocaleString()}] ${log.level.toUpperCase()} [${log.category}]: ${log.message}
+User: ${log.username || 'N/A'}
+IP: ${log.ip || 'N/A'}
+Path: ${log.path || 'N/A'}
+Details: ${details}
+-------------------`;
+      })
       .join('\n');
     
     const blob = new Blob([logText], { type: 'text/plain' });
@@ -57,9 +97,9 @@ export default function LogMonitorPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  const filteredLogs = logs.filter(log => 
-    filter === 'all' ? true : log.level === filter
-  );
+  const handlePageChange = (newPage: number) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
+  };
 
   return (
     <div className="space-y-6">
@@ -90,12 +130,12 @@ export default function LogMonitorPage() {
         </div>
       </div>
 
-      <div className="flex items-center space-x-4 pb-4">
+      <div className="flex flex-wrap items-center gap-4 pb-4">
         <div className="flex items-center space-x-2">
           <RiFilterLine className="h-5 w-5 text-[#94a3b8]" />
           <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as any)}
+            value={level}
+            onChange={(e) => setLevel(e.target.value as any)}
             className="bg-[#1a1f2e] text-white border border-gray-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Levels</option>
@@ -103,6 +143,39 @@ export default function LogMonitorPage() {
             <option value="warn">Warning</option>
             <option value="error">Error</option>
           </select>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as any)}
+            className="bg-[#1a1f2e] text-white border border-gray-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Categories</option>
+            <option value="auth">Authentication</option>
+            <option value="action">User Actions</option>
+            <option value="system">System</option>
+          </select>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <RiCalendarLine className="h-5 w-5 text-[#94a3b8]" />
+          <DatePicker
+            selected={startDate}
+            onChange={setStartDate}
+            placeholderText="Start Date"
+            className="bg-[#1a1f2e] text-white border border-gray-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            showTimeSelect
+            dateFormat="MM/dd/yyyy h:mm aa"
+          />
+          <DatePicker
+            selected={endDate}
+            onChange={setEndDate}
+            placeholderText="End Date"
+            className="bg-[#1a1f2e] text-white border border-gray-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            showTimeSelect
+            dateFormat="MM/dd/yyyy h:mm aa"
+          />
         </div>
       </div>
 
@@ -117,9 +190,9 @@ export default function LogMonitorPage() {
           <div className="flex items-center justify-center h-64">
             <div className="text-lg text-[#94a3b8]">Loading logs...</div>
           </div>
-        ) : filteredLogs.length > 0 ? (
+        ) : logs.length > 0 ? (
           <div className="divide-y divide-gray-800">
-            {filteredLogs.map((log, index) => (
+            {logs.map((log, index) => (
               <div
                 key={index}
                 className="p-4 hover:bg-[#2a2f3e] transition-colors"
@@ -141,13 +214,28 @@ export default function LogMonitorPage() {
                       >
                         {log.level.toUpperCase()}
                       </span>
-                      {log.source && (
-                        <span className="text-sm text-[#94a3b8]">
-                          {log.source}
-                        </span>
-                      )}
+                      <span
+                        className="px-2 py-1 text-xs font-medium rounded-full bg-blue-500/10 text-blue-400"
+                      >
+                        {log.category}
+                      </span>
                     </div>
                     <p className="mt-1 text-white">{log.message}</p>
+                    {log.username && (
+                      <p className="mt-1 text-sm text-[#94a3b8]">
+                        User: {log.username}
+                      </p>
+                    )}
+                    {log.ip && (
+                      <p className="text-sm text-[#94a3b8]">
+                        IP: {log.ip}
+                      </p>
+                    )}
+                    {Object.keys(log.details).length > 0 && (
+                      <pre className="mt-2 p-2 bg-black/20 rounded text-sm text-[#94a3b8] overflow-x-auto">
+                        {JSON.stringify(log.details, null, 2)}
+                      </pre>
+                    )}
                   </div>
                 </div>
               </div>
@@ -159,6 +247,24 @@ export default function LogMonitorPage() {
           </div>
         )}
       </div>
+
+      {pagination.totalPages > 1 && (
+        <div className="flex justify-center space-x-2 mt-4">
+          {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
+            <button
+              key={page}
+              onClick={() => handlePageChange(page)}
+              className={`px-3 py-1 rounded ${
+                pagination.page === page
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-[#1a1f2e] text-[#94a3b8] hover:bg-[#2a2f3e]'
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 } 
