@@ -2,12 +2,10 @@
 
 import { ProjectCardProps, CategoryType, CategoryConfig } from '../../types/projects';
 import Image from 'next/image';
-import { Card, CardContent, CardFooter, CardHeader } from './ui/card';
-import { Button } from './ui/button';
-import { formatDate } from '../utils/dateFormatter';
-import { useCategories } from '../hooks/useCategories';
 import Link from 'next/link';
+import { useCategories } from '../hooks/useCategories';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
+import { formatDate } from '../utils/dateFormatter';
 
 interface ExtendedCategoryConfig extends CategoryConfig {
   color: string;
@@ -20,41 +18,22 @@ type CategorySettings = Record<CategoryType, ExtendedCategoryConfig>;
 export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
   const { categories, loading, error } = useCategories();
   
-  // If categories are still loading, show a loading state
   if (loading) {
     return (
-      <div className="rounded-xl p-6 bg-gray-800/50 animate-pulse">
-        <div className="h-6 bg-gray-700 rounded w-3/4 mb-4"></div>
-        <div className="h-4 bg-gray-700 rounded w-full mb-2"></div>
-        <div className="h-4 bg-gray-700 rounded w-2/3"></div>
+      <div className="rounded-xl p-6 bg-gray-800/50 backdrop-blur-lg animate-pulse">
+        <div className="h-6 bg-gray-700/50 rounded w-3/4 mb-4"></div>
+        <div className="h-4 bg-gray-700/50 rounded w-full mb-2"></div>
+        <div className="h-4 bg-gray-700/50 rounded w-2/3"></div>
       </div>
     );
   }
 
-  // Debug log
-  console.log('Project:', {
-    id: project._id,
-    title: project.title,
-    category: project.category,
-  });
-  console.log('Categories from hook:', categories);
-
-  // Handle both string and object category types
   const categoryType = typeof project.category === 'string' 
     ? project.category as CategoryType
     : project.category.category;
-    
-  console.log('Category Type:', categoryType);
 
-  // Get the category settings and its color palette
   const categorySettings = (categories as CategorySettings)?.[categoryType];
-  console.log('Category Settings:', {
-    categoryType,
-    settings: categorySettings,
-    allCategories: categories,
-  });
   
-  // Use the category's assigned color palette or fall back to a default
   const palette = categorySettings?.colorPalette 
     ? COLOR_PALETTES.find(p => p.id === categorySettings.colorPalette)
     : COLOR_PALETTES.find(p => {
@@ -72,15 +51,7 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
         }
       });
 
-  // If no palette is found, use the first one as fallback
   const activePalette = palette || COLOR_PALETTES[0];
-  console.log('Color Selection:', {
-    categoryType,
-    settingsColorPalette: categorySettings?.colorPalette,
-    foundPalette: palette?.id,
-    activePaletteId: activePalette.id,
-    activePaletteColors: activePalette.colors,
-  });
 
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this project?')) {
@@ -95,42 +66,61 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
 
   return (
     <div
-      className="group relative rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+      className="group relative rounded-2xl overflow-hidden transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl"
       style={{
-        backgroundColor: activePalette.colors.muted || 'rgba(59, 130, 246, 0.1)',
-        borderColor: activePalette.colors.primary || '#3b82f6',
-        borderWidth: '1px',
+        background: `linear-gradient(135deg, 
+          ${activePalette.colors.primary}15 0%, 
+          ${activePalette.colors.primary}05 100%)`,
+        backdropFilter: 'blur(20px)',
+        border: `1px solid ${activePalette.colors.primary}30`,
+        boxShadow: `0 4px 24px -1px ${activePalette.colors.primary}10`,
       }}
     >
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      {/* Glass overlay */}
+      <div 
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        style={{
+          background: `linear-gradient(135deg, 
+            ${activePalette.colors.primary}20 0%, 
+            ${activePalette.colors.accent}10 100%)`,
+          backdropFilter: 'blur(10px)',
+        }}
+      />
       
-      <div className="relative p-6 flex flex-col space-y-4">
+      {/* Content */}
+      <div className="relative p-8 flex flex-col space-y-6">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <h3 
-              className="text-xl font-bold mb-2 text-white group-hover:text-white/90 transition-colors duration-300"
+              className="text-2xl font-bold mb-3 text-white/90 group-hover:text-white transition-colors duration-300"
+              style={{
+                textShadow: `0 2px 10px ${activePalette.colors.primary}40`
+              }}
             >
               {project.title}
             </h3>
             <p 
-              className="text-gray-200/90 text-sm line-clamp-2"
+              className="text-white/70 text-base line-clamp-2 group-hover:text-white/80 transition-colors duration-300"
             >
               {project.description}
             </p>
           </div>
         </div>
 
-        {/* Tags with improved styling */}
+        {/* Tags */}
         {project.tags && project.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-auto">
+          <div className="flex flex-wrap gap-2">
             {project.tags.map((tag) => (
               <span
                 key={tag}
-                className="text-xs px-3 py-1 rounded-full font-medium transition-colors duration-300"
+                className="text-sm px-4 py-1.5 rounded-full font-medium transition-all duration-300 hover:scale-105"
                 style={{
-                  backgroundColor: `${activePalette.colors.accent || '#93c5fd'}20`,
-                  color: '#ffffff',
-                  border: `1px solid ${activePalette.colors.accent || '#93c5fd'}40`
+                  background: `linear-gradient(135deg, 
+                    ${activePalette.colors.primary}20 0%, 
+                    ${activePalette.colors.primary}10 100%)`,
+                  border: `1px solid ${activePalette.colors.primary}30`,
+                  color: activePalette.colors.accent,
+                  backdropFilter: 'blur(5px)',
                 }}
               >
                 {tag}
@@ -139,19 +129,19 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
           </div>
         )}
 
-        {/* Project metadata with improved layout */}
+        {/* Metadata */}
         <div 
-          className="text-xs space-y-1 pt-4 border-t"
-          style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}
+          className="text-sm space-y-2 pt-4 border-t transition-colors duration-300"
+          style={{ borderColor: `${activePalette.colors.primary}20` }}
         >
-          <div className="flex items-center justify-between text-gray-300">
-            <span className="flex items-center gap-1">
-              <span className="text-gray-400">Created:</span> 
+          <div className="flex items-center justify-between text-white/60 group-hover:text-white/70">
+            <span className="flex items-center gap-2">
+              <span className="text-white/50">Created</span> 
               {formatDate(project.createdAt)}
             </span>
             {project.updatedAt && (
-              <span className="flex items-center gap-1">
-                <span className="text-gray-400">Updated:</span>
+              <span className="flex items-center gap-2">
+                <span className="text-white/50">Updated</span>
                 {formatDate(project.updatedAt)}
               </span>
             )}
@@ -159,20 +149,42 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
         </div>
       </div>
 
-      {/* Action buttons with improved styling */}
-      <div className="p-4 border-t border-current/10 bg-black/5">
-        <div className="flex gap-2 justify-end">
+      {/* Actions */}
+      <div 
+        className="p-6 border-t transition-colors duration-300 backdrop-blur-sm"
+        style={{ 
+          borderColor: `${activePalette.colors.primary}20`,
+          background: `linear-gradient(to top, 
+            ${activePalette.colors.primary}15,
+            ${activePalette.colors.primary}05
+          )`
+        }}
+      >
+        <div className="flex gap-3 justify-end">
           <Link href={`/admin/project/add?id=${project._id}&category=${project.category}`}>
             <button
-              className="px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-300 hover:bg-white/10"
-              style={{ color: activePalette.colors.primary || '#3b82f6' }}
+              className="px-6 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 hover:scale-105"
+              style={{ 
+                background: `linear-gradient(135deg, 
+                  ${activePalette.colors.primary}30 0%, 
+                  ${activePalette.colors.primary}20 100%)`,
+                color: activePalette.colors.accent,
+                border: `1px solid ${activePalette.colors.primary}30`,
+                backdropFilter: 'blur(5px)',
+              }}
             >
               Edit
             </button>
           </Link>
           <button
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-red-500/10 text-red-400 transition-colors duration-300 hover:bg-red-500/20"
             onClick={handleDelete}
+            className="px-6 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 hover:scale-105"
+            style={{ 
+              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.1) 100%)',
+              color: '#FCA5A5',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              backdropFilter: 'blur(5px)',
+            }}
           >
             Delete
           </button>
