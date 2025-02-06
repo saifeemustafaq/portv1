@@ -2,14 +2,16 @@ import { ButtonHTMLAttributes, ReactNode } from 'react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
-  variant?: 'default' | 'destructive' | 'outline';
+  variant?: 'default' | 'destructive' | 'outline' | 'ghost' | 'link';
   size?: 'sm' | 'md' | 'lg';
 }
 
 const variants = {
-  default: 'bg-blue-600 text-white hover:bg-blue-700',
+  default: 'bg-primary text-white hover:bg-primary/90',
   destructive: 'bg-red-600 text-white hover:bg-red-700',
-  outline: 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+  outline: 'border border-[#2a2f3e] bg-[#1a1f2e] text-[#f8fafc] hover:bg-[#2a2f3e]',
+  ghost: 'hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-50',
+  link: 'text-primary underline-offset-4 hover:underline',
 };
 
 const sizes = {

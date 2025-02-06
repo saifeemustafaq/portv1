@@ -3,17 +3,18 @@ import { getServerSession } from 'next-auth';
 import connectDB from '@/lib/db';
 import Project from '@/models/Project';
 import Admin from '@/models/Admin';
+import Category from '@/models/Category';
 import { logAction, logError } from '@/app/utils/logger';
 import { authOptions } from '@/app/api/auth/auth.config';
 import { AuthenticationError, ValidationError, NotFoundError, DatabaseError } from '@/lib/errors/CustomErrors';
 import { withErrorHandler } from '@/lib/errors/errorMiddleware';
-import { ProjectCategory } from '@/types/projects';
+import { CategoryType } from '@/types/projects';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
 import { InvalidCategoryError } from '@/app/utils/errors/ProjectErrors';
 
-// Type guard for ProjectCategory
-function isValidCategory(category: string): category is ProjectCategory {
-  return Object.keys(CATEGORY_CONFIG).includes(category);
+// Type guard for CategoryType
+function isValidCategory(category: unknown): category is CategoryType {
+  return typeof category === 'string' && Object.keys(CATEGORY_CONFIG).includes(category);
 }
 
 async function handleGetProjects(request: NextRequest) {
@@ -26,12 +27,17 @@ async function handleGetProjects(request: NextRequest) {
   try {
     await connectDB();
   } catch (error) {
-    throw new DatabaseError('Failed to connect to database', { error });
+    console.error('Database connection error:', error);
+    throw new DatabaseError('Failed to connect to database', { 
+      error,
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 
   // Find the admin user by username (stored in email field of session)
   const admin = await Admin.findOne({ username: session.user.email });
   if (!admin) {
+    console.error('Admin not found for username:', session.user.email);
     throw new NotFoundError('Admin user not found');
   }
 
@@ -39,20 +45,36 @@ async function handleGetProjects(request: NextRequest) {
   const category = searchParams.get('category');
 
   if (!category) {
+    console.error('Missing category parameter');
     throw new InvalidCategoryError('Category parameter is required');
   }
 
   if (!isValidCategory(category)) {
+    console.error('Invalid category:', category);
     throw new InvalidCategoryError(`Invalid category: ${category}`);
   }
 
   try {
-    const query = category ? { category } : {};
-    const projects = await Project.find(query).sort({ createdAt: -1 });
+    // Ensure Category model is loaded before using Project model
+    const categoryDoc = await Category.findOne({ category });  // Find by category string
+    if (!categoryDoc) {
+      throw new NotFoundError(`Category ${category} not found`);
+    }
+    
+    const query = { category: categoryDoc._id };  // Use the category document's ID
+    console.log('Executing project query:', query);
+    const projects = await Project.find(query)
+      .populate('category')  // Populate the category reference
+      .sort({ createdAt: -1 });
+    console.log(`Found ${projects.length} projects`);
     return NextResponse.json({ projects });
   } catch (error) {
+    console.error('Project fetch error:', error);
     await logError('system', 'Get projects error', error as Error);
-    throw new DatabaseError('Failed to fetch projects', { error });
+    throw new DatabaseError('Failed to fetch projects', { 
+      error,
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }
 
@@ -116,10 +138,21 @@ async function handleCreateProject(request: NextRequest) {
   }
 
   try {
+    // Find the category document first
+    const categoryDoc = await Category.findOne({ category: data.category });
+    if (!categoryDoc) {
+      throw new NotFoundError(`Category ${data.category} not found`);
+    }
+
+    // Create project with category reference
     const project = await Project.create({
       ...data,
+      category: categoryDoc._id,  // Use the category document's ID
       createdBy: admin._id
     });
+    
+    // Populate the category before returning
+    await project.populate('category');
     
     await logAction('Project created', {
       projectId: project._id.toString(),
@@ -259,7 +292,7 @@ async function handleDeleteProject(request: NextRequest) {
       deletedBy: session.user.email
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, message: 'Project deleted successfully' });
   } catch (error) {
     await logError('system', 'Delete project error', error as Error);
     throw new DatabaseError('Failed to delete project', { error });

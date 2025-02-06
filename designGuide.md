@@ -76,6 +76,69 @@ We employ a sophisticated triple-font system:
   - Dark: #7e22ce (Deep Purple)
   - Muted: rgba(147, 51, 234, 0.2) (Backgrounds)
 
+#### Predefined Category Color Palettes
+Each palette is designed for dark theme compatibility with proper contrast ratios.
+
+1. **Ocean Depths**
+   - Primary: #0EA5E9 (Vivid Blue)
+   - Secondary: #0891B2 (Teal)
+   - Accent: #06B6D4 (Cyan)
+   - Muted: rgba(14, 165, 233, 0.2)
+
+2. **Forest Haven**
+   - Primary: #059669 (Emerald)
+   - Secondary: #10B981 (Green)
+   - Accent: #34D399 (Light Green)
+   - Muted: rgba(5, 150, 105, 0.2)
+
+3. **Sunset Glow**
+   - Primary: #F97316 (Orange)
+   - Secondary: #FB923C (Light Orange)
+   - Accent: #FED7AA (Pale Orange)
+   - Muted: rgba(249, 115, 22, 0.2)
+
+4. **Royal Purple**
+   - Primary: #7C3AED (Violet)
+   - Secondary: #8B5CF6 (Purple)
+   - Accent: #A78BFA (Light Purple)
+   - Muted: rgba(124, 58, 237, 0.2)
+
+5. **Ruby Fusion**
+   - Primary: #DC2626 (Red)
+   - Secondary: #EF4444 (Light Red)
+   - Accent: #FCA5A5 (Pale Red)
+   - Muted: rgba(220, 38, 38, 0.2)
+
+6. **Arctic Aurora**
+   - Primary: #2DD4BF (Teal)
+   - Secondary: #5EEAD4 (Light Teal)
+   - Accent: #99F6E4 (Pale Teal)
+   - Muted: rgba(45, 212, 191, 0.2)
+
+7. **Golden Dawn**
+   - Primary: #D97706 (Amber)
+   - Secondary: #F59E0B (Yellow)
+   - Accent: #FCD34D (Light Yellow)
+   - Muted: rgba(217, 119, 6, 0.2)
+
+8. **Cherry Blossom**
+   - Primary: #DB2777 (Pink)
+   - Secondary: #EC4899 (Light Pink)
+   - Accent: #F9A8D4 (Pale Pink)
+   - Muted: rgba(219, 39, 119, 0.2)
+
+9. **Electric Indigo**
+   - Primary: #4F46E5 (Indigo)
+   - Secondary: #6366F1 (Light Indigo)
+   - Accent: #A5B4FC (Pale Indigo)
+   - Muted: rgba(79, 70, 229, 0.2)
+
+10. **Midnight Sea**
+    - Primary: #1E40AF (Dark Blue)
+    - Secondary: #3B82F6 (Blue)
+    - Accent: #93C5FD (Light Blue)
+    - Muted: rgba(30, 64, 175, 0.2)
+
 #### Interactive States
 - **Button Gradients**:
   - Primary: #3b82f6 to #2563eb (Solid colors for better contrast)

@@ -1,6 +1,6 @@
-import { CategoryConfig, ProjectCategory } from '../../types/projects';
+import { CategoryConfig, CategoryType } from '@/types/projects';
 
-export const CATEGORY_CONFIG: Record<ProjectCategory, CategoryConfig> = {
+export const CATEGORY_CONFIG: Record<CategoryType, CategoryConfig> = {
   product: {
     title: 'Product Projects',
     description: 'Manage your product portfolio projects',

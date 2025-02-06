@@ -1,11 +1,23 @@
 import { ReactNode } from 'react';
 
-export type ProjectCategory = 'product' | 'software' | 'content' | 'innovation';
+export type CategoryType = 'product' | 'software' | 'content' | 'innovation';
+
+export interface ProjectCategory {
+  _id: string;
+  name: string;
+  description?: string;
+  colorPalette?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  category: CategoryType;
+  enabled: boolean;
+  title: string;
+}
 
 export interface CategoryConfig {
   title: string;
   description: string;
-  category: ProjectCategory;
+  category: CategoryType;
   icon?: ReactNode;
 }
 

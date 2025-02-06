@@ -90,7 +90,7 @@ export default function AdminLayout({
 
         {/* Main content */}
         <div className="pl-64">
-          <main className="py-6 px-8 text-[#e2e8f0]">
+          <main className="py-6 px-8 text-[#e2e8f0] bg-[#0f1117] min-h-screen">
             {children}
           </main>
         </div>

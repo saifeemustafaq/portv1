@@ -1,50 +1,17 @@
-const mongoose = require('mongoose');
-const { Schema } = mongoose;
+const { MongoClient } = require('mongodb');
+require('dotenv').config();
 
-// Define Project Schema
-const projectSchema = new Schema({
-  title: String,
-  description: String,
-  category: String,
-  createdBy: Schema.Types.ObjectId,
-  createdAt: Date,
-  updatedAt: Date
-});
-
-// Create Project model
-const Project = mongoose.model('Project', projectSchema);
-
-async function main() {
-  try {
-    // Connect to MongoDB
-    await mongoose.connect('mongodb+srv://saifeemustafaq:tFHKSbzioKhicgEP@cluster0.fzeio.mongodb.net/portfolio?retryWrites=true&w=majority&authSource=admin');
-    console.log('Connected to MongoDB');
-
-    // Find all projects
-    const allProjects = await Project.find({});
-    console.log('\nAll Projects:', JSON.stringify(allProjects, null, 2));
-
-    // Find product category projects
-    const productProjects = await Project.find({ category: 'product' });
-    console.log('\nProduct Category Projects:', JSON.stringify(productProjects, null, 2));
-
-    // Get count by category
-    const categoryCounts = await Project.aggregate([
-      {
-        $group: {
-          _id: '$category',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-    console.log('\nProjects by Category:', JSON.stringify(categoryCounts, null, 2));
-
-  } catch (error) {
-    console.error('Error:', error);
-  } finally {
-    await mongoose.disconnect();
-    console.log('Disconnected from MongoDB');
+async function checkProjectData() {
+  const client = await MongoClient.connect(process.env.MONGODB_URI);
+  const db = client.db(process.env.MONGODB_DB);
+  const projects = await db.collection('projects').find({}).toArray();
+  console.log('Number of projects:', projects.length);
+  console.log('\nSample project data:');
+  if (projects.length > 0) {
+    const sample = projects[0];
+    console.log(JSON.stringify(sample, null, 2));
   }
+  await client.close();
 }
 
-main(); 
+checkProjectData().catch(console.error); 

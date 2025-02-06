@@ -1,9 +1,10 @@
 import mongoose from 'mongoose';
+import { CategoryType } from '@/types/projects';
 
 export interface IProject extends mongoose.Document {
   title: string;
   description: string;
-  category: 'product' | 'software' | 'content' | 'innovation';
+  category: mongoose.Types.ObjectId | CategoryType;
   image?: string;
   link?: string;
   tags?: string[];
@@ -25,9 +26,17 @@ const projectSchema = new mongoose.Schema<IProject>({
     maxlength: 300
   },
   category: {
-    type: String,
+    type: mongoose.Schema.Types.Mixed,
     required: true,
-    enum: ['product', 'software', 'content', 'innovation'],
+    ref: 'Category',
+    validate: {
+      validator: function(value: any) {
+        // Allow both ObjectId and string enum values
+        return mongoose.Types.ObjectId.isValid(value) || 
+               ['product', 'software', 'content', 'innovation'].includes(value);
+      },
+      message: 'Category must be a valid category ID or type'
+    }
   },
   image: {
     type: String,
@@ -50,6 +59,15 @@ const projectSchema = new mongoose.Schema<IProject>({
   },
 }, {
   timestamps: true,
+});
+
+// Add a pre-find middleware to populate category if it's an ObjectId
+projectSchema.pre('find', function() {
+  this.populate('category');
+});
+
+projectSchema.pre('findOne', function() {
+  this.populate('category');
 });
 
 const Project = mongoose.models.Project || mongoose.model<IProject>('Project', projectSchema);

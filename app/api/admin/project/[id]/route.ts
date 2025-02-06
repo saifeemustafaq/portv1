@@ -86,7 +86,7 @@ async function handleDeleteProject(request: NextRequest) {
       deletedBy: session.user.email
     });
 
-    return NextResponse.json({ message: 'Project deleted successfully' });
+    return NextResponse.json({ success: true, message: 'Project deleted successfully' });
   } catch (error) {
     await logError('system', 'Delete project error', error as Error);
     throw new DatabaseError('Failed to delete project', { error });
@@ -148,10 +148,10 @@ async function handleUpdateProject(request: NextRequest) {
     });
   }
 
-  if (data.category && !['product', 'software', 'content'].includes(data.category)) {
+  if (data.category && !['product', 'software', 'content', 'innovation'].includes(data.category)) {
     throw new ValidationError('Invalid category', {
       field: 'category',
-      allowedValues: ['product', 'software', 'content'],
+      allowedValues: ['product', 'software', 'content', 'innovation'],
       received: data.category
     });
   }
@@ -167,7 +167,7 @@ async function handleUpdateProject(request: NextRequest) {
       changes: data
     });
 
-    return NextResponse.json({ message: 'Project updated successfully', project });
+    return NextResponse.json({ success: true, message: 'Project updated successfully', project });
   } catch (error) {
     await logError('system', 'Update project error', error as Error);
     if (error instanceof Error && error.name === 'ValidationError') {

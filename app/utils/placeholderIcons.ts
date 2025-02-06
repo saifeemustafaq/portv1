@@ -1,16 +1,16 @@
 // Collection of modern, minimalist SVG icons for different project categories
 // Each category has its own distinct, professional icon design
 
-import { ProjectCategory } from '@/types/projects';
+import { ProjectCategory, CategoryType } from '@/types/projects';
 
-const colors: Record<ProjectCategory, string> = {
+const colors: Record<CategoryType, string> = {
   product: '#3B82F6', // Blue
   software: '#10B981', // Green
   content: '#8B5CF6',  // Purple
   innovation: '#F59E0B', // Amber
 };
 
-const categoryIcons: Record<ProjectCategory, (color: string) => string> = {
+const categoryIcons: Record<CategoryType, (color: string) => string> = {
   product: (color: string) => `data:image/svg+xml;base64,${Buffer.from(`
     <svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="400" height="400" fill="#1a1f2e"/>
@@ -48,12 +48,23 @@ const categoryIcons: Record<ProjectCategory, (color: string) => string> = {
   `).toString('base64')}`,
 };
 
-export function getRandomPlaceholder(category?: ProjectCategory): string {
-  // If category is provided, use its specific icon and color
-  if (category && category in categoryIcons) {
-    return categoryIcons[category](colors[category]);
+export function getRandomPlaceholder(category: CategoryType): string {
+  // Ensure category is a valid CategoryType
+  if (!(category in colors)) {
+    console.warn(`Invalid category type: ${category}, using default`);
+    return categoryIcons.software(colors.software);
   }
 
-  // Fallback to a default icon if category is not provided or invalid
-  return categoryIcons.software(colors.software);
+  // Generate the SVG
+  const svg = categoryIcons[category](colors[category]);
+  
+  // Log for debugging
+  console.log('Generated placeholder SVG:', {
+    category,
+    color: colors[category],
+    svgLength: svg.length,
+    svgStart: svg.substring(0, 100) + '...'
+  });
+
+  return svg;
 } 

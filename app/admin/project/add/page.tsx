@@ -6,8 +6,10 @@ import ImageCropper from '../../../components/ImageCropper';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getRandomPlaceholder } from '../../../utils/placeholderIcons';
-import { ProjectCategory } from '@/types/projects';
+import { CategoryType, ProjectCategory } from '@/types/projects';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
+import { useCategories } from '@/app/hooks/useCategories';
+import { COLOR_PALETTES } from '@/app/config/colorPalettes';
 
 // Custom error classes
 class ProjectFormError extends Error {
@@ -39,54 +41,66 @@ const MAX_TAGS = 5;
 const MAX_SKILLS = 5;
 const URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
 
-interface ProjectData {
+interface CategoryConfig {
+  color: string;
+  enabled: boolean;
+  title: string;
+}
+
+interface Categories {
+  [key: string]: CategoryConfig;
+}
+
+interface ProjectFormData {
   title: string;
   description: string;
-  category: ProjectCategory;
+  category: CategoryType;
   link?: string;
   image?: string;
   tags: string[];
   skills: string[];
 }
 
-// Type guard for ProjectCategory
-function isValidCategory(category: string): category is ProjectCategory {
-  return Object.keys(CATEGORY_CONFIG).includes(category);
+function isValidCategory(value: string): value is CategoryType {
+  return Object.keys(CATEGORY_CONFIG).includes(value);
 }
 
-function validateProjectData(data: ProjectData): void {
+function validateProjectData(data: ProjectFormData): void {
   if (!data.title.trim()) {
     throw new ValidationError('Title is required', 'title');
   }
+
   if (data.title.length > MAX_TITLE_LENGTH) {
-    throw new ValidationError(`Title must be ${MAX_TITLE_LENGTH} characters or less`, 'title');
+    throw new ValidationError(`Title must be less than ${MAX_TITLE_LENGTH} characters`, 'title');
   }
-  
+
   if (!data.description.trim()) {
     throw new ValidationError('Description is required', 'description');
   }
+
   if (data.description.length > MAX_DESCRIPTION_LENGTH) {
-    throw new ValidationError(`Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`, 'description');
+    throw new ValidationError(`Description must be less than ${MAX_DESCRIPTION_LENGTH} characters`, 'description');
   }
-  
-  if (!isValidCategory(data.category)) {
+
+  if (!Object.keys(CATEGORY_CONFIG).includes(data.category)) {
     throw new ValidationError('Invalid category selected', 'category');
   }
-  
+
   if (data.link && !URL_REGEX.test(data.link)) {
-    throw new ValidationError('Invalid project URL format', 'link');
+    throw new ValidationError('Invalid URL format', 'link');
   }
-  
+
   if (data.tags.length > MAX_TAGS) {
     throw new ValidationError(`Maximum ${MAX_TAGS} tags allowed`, 'tags');
   }
-  
+
   if (data.skills.length > MAX_SKILLS) {
     throw new ValidationError(`Maximum ${MAX_SKILLS} skills allowed`, 'skills');
   }
 }
 
 function ProjectForm() {
+  const { categories, loading: categoriesLoading, error: categoriesError, getEnabledCategories } = useCategories();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -310,28 +324,39 @@ function ProjectForm() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     clearErrors();
-    setSuccess('');
-    setLoading(true);
 
+    const formData = new FormData(e.currentTarget);
+    const categoryValue = formData.get('category') as string;
+    
     try {
-      const formData = new FormData(e.currentTarget);
-      const projectData: ProjectData = {
-        title: (formData.get('title') as string).trim(),
-        description: (formData.get('description') as string).trim(),
-        category: formData.get('category') as ProjectCategory,
-        link: (formData.get('link') as string)?.trim() || undefined,
-        image: imagePreview || getRandomPlaceholder(formData.get('category') as ProjectCategory),
+      // Validate the category is a valid CategoryType
+      if (!isValidCategory(categoryValue)) {
+        throw new ValidationError('Invalid category selected', 'category');
+      }
+
+      const projectData: ProjectFormData = {
+        title: formData.get('title') as string,
+        description: formData.get('description') as string,
+        category: categoryValue as CategoryType,
+        link: formData.get('link') as string || undefined,
+        image: imagePreview || getRandomPlaceholder(categoryValue as CategoryType),
         tags,
-        skills,
+        skills
       };
 
-      // Validate project data
+      // Log the data being sent for debugging
+      console.log('Submitting project data:', {
+        ...projectData,
+        imageLength: projectData.image?.length || 0
+      });
+
+      // Validate the data
       validateProjectData(projectData);
 
-      const url = isEditMode ? `/api/admin/project/${projectId}` : '/api/admin/project';
-      const method = isEditMode ? 'PUT' : 'POST';
+      const endpoint = projectId ? `/api/admin/project/${projectId}` : '/api/admin/project';
+      const method = projectId ? 'PUT' : 'POST';
 
-      const response = await fetch(url, {
+      const response = await fetch(endpoint, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -342,46 +367,82 @@ function ProjectForm() {
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new NetworkError('Your session has expired. Please log in again.');
-        }
-        throw new NetworkError(data.message || `Failed to ${isEditMode ? 'update' : 'add'} project`);
+        throw new NetworkError(data.message || 'Failed to save project');
       }
 
-      setSuccess(`Project ${isEditMode ? 'updated' : 'added'} successfully`);
-      
-      if (!isEditMode) {
-        formRef.current?.reset();
-        setImagePreview(null);
-        setTags([]);
-        setSkills([]);
-      }
-      
-      // Redirect after a short delay to show success message
-      setTimeout(() => {
-        router.push('/admin/dashboard');
-      }, 1500);
+      setSuccess('Project saved successfully!');
+      router.push('/admin/dashboard');
     } catch (error) {
       if (error instanceof ValidationError) {
         setFieldError(error.field || 'form', error.message);
       } else if (error instanceof NetworkError) {
         setError(error.message);
       } else {
-        setError(`An error occurred while ${isEditMode ? 'updating' : 'saving'} the project. Please try again.`);
+        setError('Failed to save project. Please try again.');
       }
-      console.error('Error submitting project:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error saving project:', error);
     }
   };
 
-  if (loading && isEditMode) {
+  // Add new function to get category style
+  const getCategoryStyle = (category: CategoryType) => {
+    if (!categories || !categories[category]) {
+      return {
+        backgroundColor: '#e5e7eb', // Default gray background
+        color: '#000000',          // Default black text
+        opacity: 1
+      };
+    }
+
+    const palette = COLOR_PALETTES.find(p => p.id === categories[category].colorPalette);
+    const backgroundColor = palette?.colors.primary || '#e5e7eb';
+    
+    return {
+      backgroundColor,
+      color: getContrastColor(backgroundColor),
+      opacity: categories[category].enabled ? 1 : 0.5
+    };
+  };
+
+  // Add helper function for contrast color
+  const getContrastColor = (hexcolor: string | undefined) => {
+    if (!hexcolor || typeof hexcolor !== 'string') {
+      return '#000000'; // Default to black if no valid color
+    }
+    // Convert hex to RGB
+    const r = parseInt(hexcolor.slice(1, 3), 16);
+    const g = parseInt(hexcolor.slice(3, 5), 16);
+    const b = parseInt(hexcolor.slice(5, 7), 16);
+    
+    // Check if conversion was successful
+    if (isNaN(r) || isNaN(g) || isNaN(b)) {
+      return '#000000'; // Default to black if conversion fails
+    }
+    
+    // Calculate relative luminance
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    
+    // Return black or white based on luminance
+    return luminance > 0.5 ? '#000000' : '#ffffff';
+  };
+
+  if (categoriesLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="text-lg text-[#94a3b8]">Loading...</div>
+      <div className="flex items-center justify-center h-40">
+        <div className="text-gray-400">Loading categories...</div>
       </div>
     );
   }
+
+  if (categoriesError) {
+    return (
+      <div className="flex items-center justify-center h-40">
+        <div className="text-red-400">Failed to load categories. Please try again later.</div>
+      </div>
+    );
+  }
+
+  const enabledCategories = getEnabledCategories();
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -406,28 +467,43 @@ function ProjectForm() {
           </div>
         )}
 
-        <div>
-          <label htmlFor="category" className="block text-sm font-medium text-[#e2e8f0] mb-1">
-            Category <span className="text-red-400">*</span>
+        <div className="space-y-2">
+          <label htmlFor="category" className="block text-sm font-medium">
+            Category
           </label>
           <select
             id="category"
             name="category"
-            required
-            onChange={() => clearErrors()}
-            className={`relative block w-full rounded-lg border-0 bg-[#1a1f2e] py-3 px-4 text-white placeholder:text-[#94a3b8] ring-1 ring-inset ${
-              fieldErrors.category ? 'ring-red-500' : 'ring-gray-700'
-            } focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6`}
-            defaultValue={initialCategory || ''}
+            className="block w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            defaultValue={initialCategory}
+            style={initialCategory ? getCategoryStyle(initialCategory as CategoryType) : {}}
+            onChange={(e) => {
+              clearErrors();
+              const style = getCategoryStyle(e.target.value as CategoryType);
+              e.target.style.backgroundColor = style.backgroundColor || '';
+              e.target.style.color = style.color || '';
+              e.target.style.opacity = style.opacity?.toString() || '1';
+            }}
           >
-            <option value="" disabled>Select a category</option>
-            <option value="product" className="text-product">Product</option>
-            <option value="software" className="text-software">Software</option>
-            <option value="content" className="text-content">Content</option>
-            <option value="innovation" className="text-innovation">Innovation</option>
+            <option value="">Select a category</option>
+            {Object.entries(categories || {})
+              .filter(([_, config]) => config.enabled)
+              .map(([key, config]) => (
+                <option
+                  key={key}
+                  value={key}
+                  style={getCategoryStyle(key as CategoryType)}
+                  disabled={!config.enabled}
+                >
+                  {config.title}
+                </option>
+              ))}
           </select>
           {fieldErrors.category && (
-            <p className="mt-1 text-sm text-red-400">{fieldErrors.category}</p>
+            <p className="text-sm text-red-500">{fieldErrors.category}</p>
+          )}
+          {categoriesError && (
+            <p className="text-sm text-red-500">Failed to load categories. Please try again.</p>
           )}
         </div>
 
