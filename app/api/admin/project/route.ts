@@ -71,35 +71,50 @@ async function handleGetProjects(request: NextRequest) {
     };
 
     console.log('Executing project query:', JSON.stringify(query));
-    const projects = await Project.find(query)
-      .populate('category')
-      .sort({ createdAt: -1 });
-    
-    console.log(`Found ${projects.length} projects for category ${category}`);
-    
-    // Filter out projects where category population failed or category is disabled
-    const validProjects = projects.filter(project => {
-      if (typeof project.category === 'string') {
-        return true; // Keep string categories as they're valid by default
-      }
-      // For populated categories, check if it exists and is enabled
-      return project.category && (project.category as any).enabled;
-    });
+    try {
+      // Execute the query and get projects
+      const projects = await Project.find(query)
+        .populate('category')
+        .sort({ createdAt: -1 })
+        .lean();
+      
+      console.log(`Found ${projects.length} projects for category ${category}`);
+      
+      // Filter out projects where category population failed or is disabled
+      const validProjects = projects.filter(project => {
+        if (typeof project.category === 'string') {
+          return true; // Keep string categories as they're valid by default
+        }
+        return project.category && project.category.enabled;
+      });
 
-    console.log(`Returning ${validProjects.length} valid projects`);
-    
-    // Update any projects with string categories to use ObjectId
-    const updates = validProjects.map(async (project) => {
-      if (typeof project.category === 'string') {
-        await Project.findByIdAndUpdate(project._id, {
-          $set: { category: categoryDoc._id }
-        });
+      console.log(`Returning ${validProjects.length} valid projects`);
+      
+      // If there are any projects with string categories, update them
+      const projectsToUpdate = validProjects.filter(project => 
+        typeof project.category === 'string'
+      );
+
+      if (projectsToUpdate.length > 0) {
+        await Project.bulkWrite(
+          projectsToUpdate.map(project => ({
+            updateOne: {
+              filter: { _id: project._id },
+              update: { $set: { category: categoryDoc._id } }
+            }
+          }))
+        );
       }
-    });
-    
-    await Promise.all(updates);
-    
-    return NextResponse.json({ projects: validProjects });
+      
+      return NextResponse.json({ projects: validProjects });
+    } catch (error) {
+      console.error('Project fetch error:', error);
+      await logError('system', 'Get projects error', error as Error);
+      throw new DatabaseError('Failed to fetch projects', { 
+        error,
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
   } catch (error) {
     console.error('Project fetch error:', error);
     await logError('system', 'Get projects error', error as Error);

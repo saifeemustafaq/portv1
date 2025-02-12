@@ -29,6 +29,7 @@ const projectSchema = new mongoose.Schema<IProject>({
     type: mongoose.Schema.Types.Mixed,
     required: true,
     ref: 'Category',
+    index: true,
     validate: {
       validator: function(value: any) {
         // Allow both ObjectId and string enum values
@@ -59,33 +60,6 @@ const projectSchema = new mongoose.Schema<IProject>({
   },
 }, {
   timestamps: true,
-});
-
-// Add a pre-find middleware to populate and filter by enabled categories
-projectSchema.pre('find', async function() {
-  // First populate all categories
-  await this.populate('category');
-  
-  // Then modify the query to only include projects with enabled categories
-  this.where({
-    $or: [
-      { 'category.enabled': true }, // For populated ObjectId references
-      { category: { $in: ['product', 'software', 'content', 'innovation'] } } // For string categories
-    ]
-  });
-});
-
-projectSchema.pre('findOne', async function() {
-  // First populate all categories
-  await this.populate('category');
-  
-  // Then modify the query to only include projects with enabled categories
-  this.where({
-    $or: [
-      { 'category.enabled': true }, // For populated ObjectId references
-      { category: { $in: ['product', 'software', 'content', 'innovation'] } } // For string categories
-    ]
-  });
 });
 
 // Add a pre-save middleware to convert string category to ObjectId
