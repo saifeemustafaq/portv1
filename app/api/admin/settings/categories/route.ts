@@ -7,6 +7,7 @@ import connectDB from '@/lib/db';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
 import { Types, Document } from 'mongoose';
+import Project from '@/models/Project';
 
 interface ExtendedCategoryConfig {
   title: string;
@@ -190,5 +191,37 @@ export async function PATCH(request: Request) {
       { error: 'Failed to update category' },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { categoryType } = await request.json();
+    
+    if (!categoryType) {
+      return Response.json({ error: 'Category type is required' }, { status: 400 });
+    }
+
+    // Connect to MongoDB
+    await connectDB();
+
+    // First, find the Category document to get its _id
+    const categoryDoc = await Category.findOne({ category: categoryType });
+    
+    // Delete projects that match either the category string or the category ObjectId
+    const result = await Project.deleteMany({
+      $or: [
+        { category: categoryType },  // Match string category
+        { category: categoryDoc?._id }  // Match ObjectId category
+      ]
+    });
+
+    return Response.json({ 
+      message: 'Projects deleted successfully',
+      deletedCount: result.deletedCount 
+    });
+  } catch (error) {
+    console.error('Error deleting projects:', error);
+    return Response.json({ error: 'Failed to delete projects' }, { status: 500 });
   }
 } 

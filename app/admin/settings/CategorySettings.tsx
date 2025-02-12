@@ -33,21 +33,21 @@ function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }: ConfirmD
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-elevated p-8 rounded-lg max-w-md w-full mx-4 border border-[#4a4f5e] shadow-2xl">
-        <h3 className="text-xl font-semibold text-primary serif mb-3">{title}</h3>
-        <p className="text-muted mb-8 leading-relaxed">{message}</p>
+    <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
+      <div className="bg-[#1a1f2e] p-8 rounded-lg max-w-md w-full mx-4 border border-[#2a2f3e] shadow-2xl">
+        <h3 className="text-xl font-semibold text-[#f8fafc] serif mb-3">{title}</h3>
+        <p className="text-[#94a3b8] mb-8 leading-relaxed">{message}</p>
         <div className="flex justify-end space-x-4">
           <Button 
             variant="outline" 
             onClick={onCancel}
-            className="bg-surface hover:bg-[#3a3f4e] text-secondary border border-[#4a4f5e] min-w-[100px] transition-colors duration-300"
+            className="bg-[#0f1117] hover:bg-[#2a2f3e] text-[#94a3b8] border border-[#2a2f3e] min-w-[100px] transition-colors duration-300"
           >
             Cancel
           </Button>
           <Button 
             onClick={onConfirm}
-            className="bg-blue-600 hover:bg-blue-500 text-white min-w-[100px] transition-colors duration-300"
+            className="bg-red-600 hover:bg-red-500 text-[#f8fafc] min-w-[100px] transition-colors duration-300"
           >
             Confirm
           </Button>
@@ -102,6 +102,8 @@ export function CategorySettings() {
     message: '',
     onConfirm: () => {},
   });
+
+  const [selectedCategory, setSelectedCategory] = useState<CategoryType | ''>('');
 
   useEffect(() => {
     loadCategories();
@@ -276,6 +278,37 @@ export function CategorySettings() {
     }
   };
 
+  const handleDeleteProjects = async (category: CategoryType) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Projects',
+      message: `Are you sure you want to delete ALL projects in the "${categories[category].title}" category? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          const response = await fetch('/api/admin/settings/categories', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ categoryType: category }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to delete projects');
+          }
+
+          const data = await response.json();
+          toast.success(`Successfully deleted ${data.deletedCount} projects`);
+        } catch (error) {
+          toast.error('Failed to delete projects');
+          console.error('Error deleting projects:', error);
+        } finally {
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
+  };
+
   if (loading) {
     return (
       <Card className="p-8 bg-[#0f1117] border border-[#2a2f3e] rounded-lg">
@@ -388,6 +421,41 @@ export function CategorySettings() {
               );
             })}
           </div>
+
+          <Card className="p-6 bg-[#1a1f2e] border border-[#2a2f3e]">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-[#f8fafc] serif">Delete Projects</h3>
+              </div>
+              
+              <div className="text-[#94a3b8] mb-4">
+                Delete all projects in a specific category. This action cannot be undone.
+              </div>
+
+              <div className="flex gap-4">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value as CategoryType)}
+                  className="flex-1 bg-[#0f1117] text-[#f8fafc] px-3 py-2 rounded-md border border-[#2a2f3e] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
+                >
+                  <option value="">Select a category</option>
+                  {Object.entries(categories).map(([key, category]) => (
+                    <option key={key} value={key}>
+                      {category.title}
+                    </option>
+                  ))}
+                </select>
+
+                <Button
+                  onClick={() => selectedCategory && handleDeleteProjects(selectedCategory as CategoryType)}
+                  disabled={!selectedCategory}
+                  className="bg-red-600 hover:bg-red-500 text-[#f8fafc] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300"
+                >
+                  Delete All Projects
+                </Button>
+              </div>
+            </div>
+          </Card>
 
           <div className="flex justify-end pt-6 border-t border-[#2a2f3e]">
             <Button 

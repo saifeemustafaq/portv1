@@ -12,6 +12,8 @@
     "init-categories": "NEXT_RUNTIME=nodejs ts-node -r tsconfig-paths/register scripts/init-categories.ts"
   },
   "dependencies": {
+    "@babel/preset-env": "^7.26.8",
+    "@babel/register": "^7.25.9",
     "@types/bcryptjs": "^2.4.6",
     "@types/mongoose": "^5.11.96",
     "@types/react-datepicker": "^6.2.0",
