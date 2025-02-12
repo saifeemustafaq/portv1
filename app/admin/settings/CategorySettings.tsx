@@ -22,6 +22,13 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
+interface CategoryUpdate {
+  title?: string;
+  description?: string;
+  enabled?: boolean;
+  colorPalette?: string;
+}
+
 function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }: ConfirmDialogProps) {
   if (!isOpen) return null;
 
@@ -243,7 +250,7 @@ export function CategorySettings() {
     }
   };
 
-  const handleUpdateCategory = async (categoryId: string, updates: any) => {
+  const handleUpdateCategory = async (categoryId: string, updates: CategoryUpdate) => {
     try {
       const response = await fetch(`/api/admin/settings/categories`, {
         method: 'PATCH',

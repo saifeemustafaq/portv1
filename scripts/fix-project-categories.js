@@ -1,90 +1,85 @@
+const { MongoClient, ObjectId } = require('mongodb');
 require('dotenv').config();
-const mongoose = require('mongoose');
-const { Schema } = mongoose;
 
-// Define Category Schema
-const categorySchema = new Schema({
-  category: {
-    type: String,
-    enum: ['product', 'software', 'content', 'innovation'],
-    required: true,
-    unique: true,
-  },
-  title: String,
-  description: String,
-  enabled: Boolean,
-  colorPalette: String
-});
+async function fixProjectCategories() {
+  const client = await MongoClient.connect(process.env.MONGODB_URI);
+  const db = client.db(process.env.MONGODB_DB);
+  const categories = db.collection('categories');
+  const projects = db.collection('projects');
 
-const Category = mongoose.model('Category', categorySchema);
+  console.log('Starting project category fix...');
 
-// Define Project Schema
-const projectSchema = new Schema({
-  title: String,
-  description: String,
-  category: {
-    type: Schema.Types.Mixed,
-    ref: 'Category'
-  },
-  createdBy: Schema.Types.ObjectId,
-  createdAt: Date,
-  updatedAt: Date
-});
-
-const Project = mongoose.model('Project', projectSchema);
-
-async function main() {
   try {
-    if (!process.env.MONGODB_URI) {
-      throw new Error('MONGODB_URI is not defined in environment variables');
-    }
+    // Get all categories
+    const categoryDocs = await categories.find({}).toArray();
+    console.log('\nCurrent categories in DB:');
+    categoryDocs.forEach(cat => {
+      console.log(`- ${cat.category}: ${cat._id}`);
+    });
 
-    // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Connected to MongoDB\n');
+    // Create a map of category types to their new IDs
+    const categoryTypeToId = {};
+    categoryDocs.forEach(cat => {
+      categoryTypeToId[cat.category] = cat._id;
+    });
 
     // Get all projects
-    const projects = await Project.find({});
-    console.log(`Found ${projects.length} projects to process\n`);
+    const projectDocs = await projects.find({}).toArray();
+    console.log(`\nFound ${projectDocs.length} projects to process`);
 
-    // Process each project
-    for (const project of projects) {
+    // Update each project
+    for (const project of projectDocs) {
+      console.log(`\nProcessing project: ${project.title}`);
+      console.log(`Current category ID: ${JSON.stringify(project.category)}`);
+
+      // Find the old category document to get its type
+      const oldCategoryId = project.category;
+      
+      // Find the matching category by looking up its type
+      const matchingCategory = categoryDocs.find(cat => 
+        cat._id.toString() === oldCategoryId.toString()
+      );
+
+      if (!matchingCategory) {
+        console.log(`⚠️ No matching category found for project: ${project.title}`);
+        continue;
+      }
+
+      const categoryType = matchingCategory.category;
+      const newCategoryId = categoryTypeToId[categoryType];
+
+      // Update the project with the new category ID
       try {
-        // If category is a string, find the corresponding category document
-        if (typeof project.category === 'string') {
-          console.log(`Processing project "${project.title}" with category "${project.category}"`);
-          
-          const categoryDoc = await Category.findOne({ category: project.category });
-          if (categoryDoc) {
-            // Update the project with the category ID
-            await Project.findByIdAndUpdate(project._id, {
-              category: categoryDoc._id
-            });
-            console.log(`✓ Updated project "${project.title}" with category ID\n`);
-          } else {
-            console.log(`✗ Category "${project.category}" not found for project "${project.title}"\n`);
+        await projects.updateOne(
+          { _id: project._id },
+          { 
+            $set: { 
+              category: new ObjectId(newCategoryId),
+              updatedAt: new Date()
+            } 
           }
-        } else {
-          console.log(`• Project "${project.title}" already has a category ID\n`);
-        }
+        );
+        console.log(`✅ Updated project: ${project.title} from category ${categoryType}`);
+        console.log(`  Old ID: ${oldCategoryId}`);
+        console.log(`  New ID: ${newCategoryId}`);
       } catch (error) {
-        console.error(`Error processing project ${project.title}:`, error);
+        console.error(`❌ Error updating project ${project.title}:`, error);
       }
     }
 
-    // Verify the fix
-    const updatedProjects = await Project.find({}).populate('category');
-    console.log('\nVerification:');
+    // Verify the updates
+    console.log('\nVerifying updates...');
+    const updatedProjects = await projects.find({}).toArray();
     updatedProjects.forEach(project => {
-      console.log(`- ${project.title}: Category = ${project.category?.category || 'Not found'}`);
+      console.log(`- ${project.title}: Category ID = ${project.category}`);
     });
 
+    console.log('\nProject categories update completed!');
   } catch (error) {
-    console.error('\nError:', error);
+    console.error('Error fixing project categories:', error);
   } finally {
-    await mongoose.disconnect();
-    console.log('\nDisconnected from MongoDB');
+    await client.close();
   }
 }
 
-main(); 
+fixProjectCategories().catch(console.error); 

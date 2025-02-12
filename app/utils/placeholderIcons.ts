@@ -1,7 +1,7 @@
 // Collection of modern, minimalist SVG icons for different project categories
 // Each category has its own distinct, professional icon design
 
-import { ProjectCategory, CategoryType } from '@/types/projects';
+import { CategoryType } from '@/types/projects';
 
 const colors: Record<CategoryType, string> = {
   product: '#3B82F6', // Blue

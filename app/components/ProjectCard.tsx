@@ -1,7 +1,6 @@
 'use client';
 
 import { ProjectCardProps, CategoryType, CategoryConfig } from '../../types/projects';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useCategories } from '../hooks/useCategories';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
@@ -16,7 +15,7 @@ interface ExtendedCategoryConfig extends CategoryConfig {
 type CategorySettings = Record<CategoryType, ExtendedCategoryConfig>;
 
 export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
-  const { categories, loading, error } = useCategories();
+  const { categories, loading } = useCategories();
   
   if (loading) {
     return (

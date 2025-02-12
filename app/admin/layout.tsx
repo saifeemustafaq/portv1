@@ -3,11 +3,12 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
-import { RiDashboardLine, RiShoppingBag2Line, RiFileTextLine, RiCodeLine, RiSettings4Line, RiLogoutBoxLine, RiLockPasswordLine, RiAddCircleLine, RiFileHistoryLine, RiLightbulbLine } from 'react-icons/ri';
+import { RiDashboardLine, RiShoppingBag2Line, RiFileTextLine, RiCodeLine, RiSettings4Line, RiLogoutBoxLine, RiLockPasswordLine, RiAddCircleLine, RiFileHistoryLine, RiLightbulbLine, RiInformationLine } from 'react-icons/ri';
 import { ErrorBoundary } from '@/app/components/ErrorBoundary';
 
 const navigation = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: RiDashboardLine },
+  { name: 'Basic Information', href: '/admin/basic-info', icon: RiInformationLine },
   { name: 'Add Project', href: '/admin/project/add', icon: RiAddCircleLine },
   { name: 'Product', href: '/admin/product', icon: RiShoppingBag2Line },
   { name: 'Content', href: '/admin/content', icon: RiFileTextLine },

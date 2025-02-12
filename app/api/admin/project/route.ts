@@ -55,19 +55,51 @@ async function handleGetProjects(request: NextRequest) {
   }
 
   try {
-    // Ensure Category model is loaded before using Project model
-    const categoryDoc = await Category.findOne({ category });  // Find by category string
+    // Find the category document
+    const categoryDoc = await Category.findOne({ category, enabled: true });
     if (!categoryDoc) {
-      throw new NotFoundError(`Category ${category} not found`);
+      console.log(`Category ${category} not found or not enabled`);
+      return NextResponse.json({ projects: [] });
     }
-    
-    const query = { category: categoryDoc._id };  // Use the category document's ID
-    console.log('Executing project query:', query);
+
+    // Query for projects with this category
+    const query = {
+      $or: [
+        { category: categoryDoc._id },  // Match by ObjectId
+        { category: category }          // Match by string value
+      ]
+    };
+
+    console.log('Executing project query:', JSON.stringify(query));
     const projects = await Project.find(query)
-      .populate('category')  // Populate the category reference
+      .populate('category')
       .sort({ createdAt: -1 });
-    console.log(`Found ${projects.length} projects`);
-    return NextResponse.json({ projects });
+    
+    console.log(`Found ${projects.length} projects for category ${category}`);
+    
+    // Filter out projects where category population failed or category is disabled
+    const validProjects = projects.filter(project => {
+      if (typeof project.category === 'string') {
+        return true; // Keep string categories as they're valid by default
+      }
+      // For populated categories, check if it exists and is enabled
+      return project.category && (project.category as any).enabled;
+    });
+
+    console.log(`Returning ${validProjects.length} valid projects`);
+    
+    // Update any projects with string categories to use ObjectId
+    const updates = validProjects.map(async (project) => {
+      if (typeof project.category === 'string') {
+        await Project.findByIdAndUpdate(project._id, {
+          $set: { category: categoryDoc._id }
+        });
+      }
+    });
+    
+    await Promise.all(updates);
+    
+    return NextResponse.json({ projects: validProjects });
   } catch (error) {
     console.error('Project fetch error:', error);
     await logError('system', 'Get projects error', error as Error);

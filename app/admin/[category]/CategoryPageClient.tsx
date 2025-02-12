@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { ProjectCategory } from '@/types/projects';
+import { ProjectCategory, Project } from '@/types/projects';
 import ProjectGrid from '@/app/components/ProjectGrid';
 import EmptyState from '@/app/components/EmptyState';
 import { ProjectDeleteError } from '@/app/utils/errors/ProjectErrors';
 import { Toast } from '@/app/components/ui/toast';
 
 interface CategoryPageClientProps {
-  projects: any[];
+  projects: Project[];
   category: ProjectCategory;
 }
 

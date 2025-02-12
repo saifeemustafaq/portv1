@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CategoryConfig, ProjectCategory, CategoryType } from '@/types/projects';
+import { CategoryConfig, CategoryType } from '@/types/projects';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
 
 interface ExtendedCategoryConfig extends CategoryConfig {
@@ -72,7 +72,7 @@ export function useCategories() {
 
   const getEnabledCategories = () => {
     const enabled = Object.entries(categories)
-      .filter(([_, config]) => config.enabled)
+      .filter(([, config]) => config.enabled)
       .reduce((acc, [key, value]) => {
         return {
           ...acc,

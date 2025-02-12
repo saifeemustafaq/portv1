@@ -1,9 +1,15 @@
-const { CATEGORY_CONFIG } = require('../app/config/categories');
-const { CategoryType } = require('../types/projects');
-const Category = require('../models/Category').default;
-const connectDB = require('../lib/db').default;
+import * as dotenv from 'dotenv';
+import { resolve } from 'path';
 
-const getDefaultColorPalette = (categoryType) => {
+// Load environment variables from the root .env file
+dotenv.config({ path: resolve(__dirname, '../.env') });
+
+import { CATEGORY_CONFIG } from '../app/config/categories';
+import { CategoryType, CategoryConfig } from '../types/projects';
+import Category from '../models/Category';
+import connectDB from '../lib/db';
+
+const getDefaultColorPalette = (categoryType: CategoryType): string => {
   switch(categoryType) {
     case 'product':
       return 'forest-haven';
@@ -26,7 +32,7 @@ async function initCategories() {
     console.log('Starting category initialization...');
     
     // Create initial categories from config
-    for (const [category, config] of Object.entries(CATEGORY_CONFIG)) {
+    for (const [category, config] of Object.entries(CATEGORY_CONFIG) as [CategoryType, CategoryConfig][]) {
       const categoryType = category;
       const existingCategory = await Category.findOne({ category: categoryType });
       

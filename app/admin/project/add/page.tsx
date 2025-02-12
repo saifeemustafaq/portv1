@@ -6,7 +6,7 @@ import ImageCropper from '../../../components/ImageCropper';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getRandomPlaceholder } from '../../../utils/placeholderIcons';
-import { CategoryType, ProjectCategory } from '@/types/projects';
+import { CategoryType } from '@/types/projects';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
 import { useCategories } from '@/app/hooks/useCategories';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
@@ -45,10 +45,6 @@ interface CategoryConfig {
   color: string;
   enabled: boolean;
   title: string;
-}
-
-interface Categories {
-  [key: string]: CategoryConfig;
 }
 
 interface ProjectFormData {
@@ -153,10 +149,10 @@ function ProjectForm() {
         if (titleInput) titleInput.value = project.title;
         if (descriptionInput) descriptionInput.value = project.description;
         if (linkInput) linkInput.value = project.link || '';
-        if (categorySelect) categorySelect.value = project.category;
+        if (categorySelect) categorySelect.value = project.category.category || project.category;
       }
 
-      setInitialCategory(project.category);
+      setInitialCategory(project.category.category || project.category);
       setImagePreview(project.image);
       setTags(project.tags || []);
       setSkills(project.skills || []);

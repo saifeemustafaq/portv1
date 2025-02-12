@@ -2,7 +2,6 @@
   "name": "port",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
@@ -10,7 +9,7 @@
     "lint": "next lint",
     "init-admin": "ts-node -r tsconfig-paths/register scripts/init-admin.ts",
     "test-db": "ts-node -r tsconfig-paths/register scripts/test-db.ts",
-    "init-categories": "ts-node -r tsconfig-paths/register scripts/init-categories.ts"
+    "init-categories": "NEXT_RUNTIME=nodejs ts-node -r tsconfig-paths/register scripts/init-categories.ts"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

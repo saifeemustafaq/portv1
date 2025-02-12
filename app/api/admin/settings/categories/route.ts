@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth.config';
-import { CategoryType } from '@/types/projects';
+import { CategoryType, ProjectCategory } from '@/types/projects';
 import Category from '@/models/Category';
 import connectDB from '@/lib/db';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
-import { Types } from 'mongoose';
+import { Types, Document } from 'mongoose';
 
 interface ExtendedCategoryConfig {
   title: string;
@@ -15,6 +15,14 @@ interface ExtendedCategoryConfig {
   enabled: boolean;
   colorPalette: string;
   _id: string;
+}
+
+interface CategoryDocument extends Document {
+  title: string;
+  description: string;
+  category: CategoryType;
+  enabled: boolean;
+  colorPalette: string;
 }
 
 const getDefaultColorPalette = (categoryType: CategoryType): string => {
@@ -59,7 +67,7 @@ export async function GET() {
       return NextResponse.json({ categories: defaultCategories });
     }
     
-    const formattedCategories = categories.reduce((acc, cat: any) => {
+    const formattedCategories = categories.reduce((acc, cat: CategoryDocument) => {
       if (cat && cat.category) {
         const categoryType = cat.category as CategoryType;
         acc[categoryType] = {

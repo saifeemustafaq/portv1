@@ -66,10 +66,9 @@ interface PageProps {
   params: {
     category: string;
   };
-  searchParams: { [key: string]: string | string[] | undefined };
 }
 
-export default async function Page({ params, searchParams }: PageProps) {
+export default async function Page({ params }: PageProps) {
   // Await params to fix Next.js warning
   const category = (await Promise.resolve(params)).category;
   
