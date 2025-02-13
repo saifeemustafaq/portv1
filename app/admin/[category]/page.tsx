@@ -1,4 +1,5 @@
-import { ProjectCategory } from '@/types/projects';
+import React from 'react';
+import { CategoryType, ProjectCategory } from '@/types/projects';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
 import { notFound } from 'next/navigation';
 import { headers } from 'next/headers';
@@ -11,12 +12,12 @@ function getBaseUrl() {
   return process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 }
 
-// Type guard for ProjectCategory
-function isValidCategory(category: string): category is ProjectCategory {
+// Type guard for CategoryType
+function isValidCategory(category: string): category is CategoryType {
   return Object.keys(CATEGORY_CONFIG).includes(category);
 }
 
-async function getProjects(category: ProjectCategory) {
+async function getProjects(category: CategoryType) {
   try {
     const baseUrl = getBaseUrl();
     const url = new URL(`/api/admin/project`, baseUrl);
@@ -62,22 +63,19 @@ async function getProjects(category: ProjectCategory) {
   }
 }
 
-interface PageProps {
-  params: {
-    category: string;
-  };
-}
+type Props = {
+  params: { category: string };
+};
 
-export default async function Page({ params }: PageProps) {
-  // Await params to fix Next.js warning
-  const category = (await Promise.resolve(params)).category;
+async function Page({ params }: Props) {
+  const { category } = params;
   
   // Validate category before type assertion
   if (!isValidCategory(category)) {
     notFound();
   }
 
-  const validCategory = category as ProjectCategory;
+  const validCategory = category as CategoryType;
   const config = CATEGORY_CONFIG[validCategory];
   let projects;
   
@@ -96,6 +94,18 @@ export default async function Page({ params }: PageProps) {
     throw error instanceof Error ? error : new Error(String(error));
   }
 
+  // Create a ProjectCategory object from the category type and config
+  const categoryObject: ProjectCategory = {
+    _id: validCategory,
+    name: config.title,
+    description: config.description,
+    category: validCategory,
+    enabled: true,
+    title: config.title,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+
   return (
     <div className="container mx-auto py-8">
       <div className="mb-8">
@@ -103,7 +113,9 @@ export default async function Page({ params }: PageProps) {
         <p className="mt-2 text-gray-600">{config.description}</p>
       </div>
 
-      <CategoryPageClient projects={projects} category={validCategory} />
+      <CategoryPageClient projects={projects} category={categoryObject} />
     </div>
   );
-} 
+}
+
+export default Page as unknown as (props: Props) => Promise<React.ReactElement>; 

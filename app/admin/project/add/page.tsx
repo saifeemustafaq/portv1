@@ -41,12 +41,6 @@ const MAX_TAGS = 5;
 const MAX_SKILLS = 5;
 const URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
 
-interface CategoryConfig {
-  color: string;
-  enabled: boolean;
-  title: string;
-}
-
 interface ProjectFormData {
   title: string;
   description: string;
@@ -103,7 +97,7 @@ function validateProjectData(data: ProjectFormData): void {
 }
 
 function ProjectForm() {
-  const { categories, loading: categoriesLoading, error: categoriesError, getEnabledCategories } = useCategories();
+  const { categories, loading: categoriesLoading, error: categoriesError } = useCategories();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -515,8 +509,6 @@ function ProjectForm() {
     );
   }
 
-  const enabledCategories = getEnabledCategories();
-
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
@@ -560,7 +552,7 @@ function ProjectForm() {
           >
             <option value="">Select a category</option>
             {Object.entries(categories || {})
-              .filter(([_, config]) => config.enabled)
+              .filter(([, config]) => config.enabled)
               .map(([key, config]) => (
                 <option
                   key={key}

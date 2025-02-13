@@ -1,76 +1,18 @@
 'use client';
 
-import { ProjectCardProps, CategoryType, CategoryConfig, ProjectCategory } from '../../types/projects';
+import { ProjectCardProps, ProjectCategory } from '../../types/projects';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCategories } from '../hooks/useCategories';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
-import { formatDate } from '../utils/dateFormatter';
-import { useState, useEffect } from 'react';
-
-interface ExtendedCategoryConfig extends CategoryConfig {
-  color: string;
-  enabled: boolean;
-  colorPalette?: string;
-}
-
-type CategorySettings = Record<CategoryType, ExtendedCategoryConfig>;
-
-function getCategoryValue(category: string | ProjectCategory): CategoryType {
-  if (typeof category === 'string') {
-    return category as CategoryType;
-  }
-  return category.category;
-}
-
-// Add placeholder icon generator
-function getPlaceholderIcon(category: CategoryType, color: string) {
-  const commonProps = {
-    width: 96,
-    height: 96,
-    className: "rounded-lg object-cover w-full h-full p-2",
-  };
-
-  const icons = {
-    software: (
-      <svg {...commonProps} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="96" height="96" fill="transparent"/>
-        <path d="M30 48L42 60M42 36L30 48L42 36ZM54 60L66 48L54 36" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    ),
-    product: (
-      <svg {...commonProps} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="96" height="96" fill="transparent"/>
-        <path d="M48 24L72 36V60L48 72L24 60V36L48 24Z" stroke={color} strokeWidth="4" strokeLinejoin="round"/>
-        <path d="M48 72V48M48 48L72 36M48 48L24 36" stroke={color} strokeWidth="4" strokeLinecap="round"/>
-      </svg>
-    ),
-    content: (
-      <svg {...commonProps} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="96" height="96" fill="transparent"/>
-        <path d="M30 36h36M30 48h36M30 60h24" stroke={color} strokeWidth="4" strokeLinecap="round"/>
-        <rect x="24" y="24" width="48" height="48" rx="4" stroke={color} strokeWidth="4"/>
-      </svg>
-    ),
-    innovation: (
-      <svg {...commonProps} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="96" height="96" fill="transparent"/>
-        <path d="M48 28v40M32 48h32M48 68c6.627 0 12-5.373 12-12s-5.373-12-12-12-12 5.373-12 12 5.373 12 12 12z" stroke={color} strokeWidth="4" strokeLinecap="round"/>
-      </svg>
-    )
-  };
-
-  return icons[category] || icons.software;
-}
 
 export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
-  const { categories, loading } = useCategories();
-  const [imageError, setImageError] = useState(false);
+  const { categories } = useCategories();
 
   // Get category settings
   const categoryType = typeof project.category === 'string' 
     ? project.category 
-    : project.category.category;
+    : (project.category as ProjectCategory).category;
 
   const categorySettings = categories[categoryType];
 
@@ -136,7 +78,6 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
               alt={project.title}
               fill
               className="object-contain bg-black/20"
-              onError={() => setImageError(true)}
             />
           ) : (
             <div 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
-import { CategoryConfig, CategoryType, ProjectCategory } from '@/types/projects';
+import { CategoryConfig, CategoryType } from '@/types/projects';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { toast } from 'sonner';
@@ -20,13 +20,6 @@ interface ConfirmDialogProps {
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
-}
-
-interface CategoryUpdate {
-  title?: string;
-  description?: string;
-  enabled?: boolean;
-  colorPalette?: string;
 }
 
 function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }: ConfirmDialogProps) {
@@ -249,32 +242,6 @@ export function CategorySettings() {
     } catch (error) {
       toast.error('Failed to initialize categories');
       console.error('Error initializing categories:', error);
-    }
-  };
-
-  const handleUpdateCategory = async (categoryId: string, updates: CategoryUpdate) => {
-    try {
-      const response = await fetch(`/api/admin/settings/categories`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          categoryId,
-          updates,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update category');
-      }
-
-      // Refresh categories after update
-      await loadCategories();
-      toast.success('Category updated successfully');
-    } catch (error) {
-      console.error('Error updating category:', error);
-      toast.error('Failed to update category');
     }
   };
 

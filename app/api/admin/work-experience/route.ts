@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth.config';
 import clientPromise from '@/app/lib/mongodb';
-import WorkExperience from '@/models/WorkExperience';
 import mongoose from 'mongoose';
 
 if (!process.env.MONGODB_DB) {

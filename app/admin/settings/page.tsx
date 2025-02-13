@@ -1,6 +1,5 @@
 'use client';
 
-import { RiSettings4Line } from 'react-icons/ri';
 import { CategorySettings } from './CategorySettings';
 
 export default function SettingsPage() {

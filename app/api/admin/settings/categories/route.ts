@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth.config';
-import { CategoryType, ProjectCategory } from '@/types/projects';
+import { CategoryType } from '@/types/projects';
 import Category from '@/models/Category';
 import connectDB from '@/lib/db';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
-import { Types, Document } from 'mongoose';
+import { Document } from 'mongoose';
 import Project from '@/models/Project';
 import { deleteImage } from '@/app/utils/azureStorage';
 import { logAction, logError } from '@/app/utils/logger';

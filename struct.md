@@ -27,103 +27,133 @@ Proceed with the next top five things which you feel we should take on first in 
 
 Once done, go back to @errorHandling.md and update it to reflect the progress. Use the checklist to track the progress, and update the progress tracker as well. and rather than removing anything, you should be using the tracking system to mark items as needed.
 
+---
+
+Now let's fix all the build errors, run npm run build, and keep on fixing the build errors until you fix them all. Remember, please don't turn of the build errors, rather I want you to fix them permanently. Please note, the error handling code is important to me, so please don't remove it, instead improve it if needed.
+
+Here is the structure for any reference:
+
 .
 ├── README.md
+├── __tests__
+│   ├── api
+│   │   └── admin
+│   │       └── settings
+│   │           └── categories.test.ts
+│   └── integration
+│       ├── categoryManagement.test.ts
+│       └── categoryManagement.test.tsx
+├── actionPlan.md
 ├── app
 │   ├── admin
+│   │   ├── [category]
+│   │   │   ├── CategoryPageClient.tsx
+│   │   │   └── page.tsx
+│   │   ├── basic-info
+│   │   │   └── page.tsx
 │   │   ├── dashboard
+│   │   │   ├── layout.tsx
 │   │   │   └── page.tsx
+│   │   ├── innovation
+│   │   ├── layout.tsx
 │   │   ├── login
+│   │   │   ├── LoginForm.tsx
 │   │   │   └── page.tsx
-│   │   ├── portfolio
-│   │   │   ├── [id]
-│   │   │   │   └── page.tsx
+│   │   ├── logs
 │   │   │   └── page.tsx
-│   │   ├── settings
-│   │   └── users
+│   │   ├── project
+│   │   │   └── add
+│   │   │       └── page.tsx
+│   │   └── settings
+│   │       ├── CategorySettings.tsx
+│   │       ├── change-password
+│   │       │   └── page.tsx
+│   │       └── page.tsx
 │   ├── api
 │   │   ├── admin
-│   │   │   ├── activity
+│   │   │   ├── basic-info
 │   │   │   │   └── route.ts
-│   │   │   ├── create-first-admin
+│   │   │   ├── change-password
 │   │   │   │   └── route.ts
-│   │   │   └── stats
+│   │   │   ├── debug
+│   │   │   ├── get-image-url
+│   │   │   │   └── route.ts
+│   │   │   ├── project
+│   │   │   │   ├── [id]
+│   │   │   │   │   └── route.ts
+│   │   │   │   └── route.ts
+│   │   │   ├── settings
+│   │   │   │   └── categories
+│   │   │   │       ├── README.md
+│   │   │   │       ├── init
+│   │   │   │       │   └── route.ts
+│   │   │   │       └── route.ts
+│   │   │   ├── test-session
+│   │   │   │   └── route.ts
+│   │   │   ├── upload
+│   │   │   │   └── route.ts
+│   │   │   └── work-experience
 │   │   │       └── route.ts
 │   │   ├── auth
-│   │   │   └── [...nextauth]
-│   │   │       └── route.ts
-│   │   ├── portfolio
-│   │   │   ├── [id]
+│   │   │   ├── [...nextauth]
 │   │   │   │   └── route.ts
-│   │   │   ├── route.ts
-│   │   │   ├── search
-│   │   │   │   └── route.ts
-│   │   │   └── upload
-│   │   │       └── route.ts
-│   │   └── test-db
+│   │   │   └── auth.config.ts
+│   │   ├── log
+│   │   │   └── route.ts
+│   │   └── logs
 │   │       └── route.ts
+│   ├── components
+│   │   ├── EmptyState.tsx
+│   │   ├── ErrorBoundary.tsx
+│   │   ├── ImageCropper.tsx
+│   │   ├── ProjectCard.tsx
+│   │   ├── ProjectGrid.tsx
+│   │   └── ui
+│   │       ├── button.tsx
+│   │       ├── card.tsx
+│   │       └── toast.tsx
+│   ├── config
+│   │   ├── categories.ts
+│   │   └── colorPalettes.ts
 │   ├── favicon.ico
 │   ├── globals.css
+│   ├── hooks
+│   │   └── useCategories.ts
 │   ├── layout.tsx
+│   ├── lib
+│   │   ├── bootstrap.ts
+│   │   └── mongodb.ts
 │   ├── page.tsx
-│   └── portfolio
-│       ├── content
-│       ├── page.tsx
-│       ├── product
-│       └── software
-│           └── page.tsx
-├── auth.ts
-├── components
-│   ├── admin
-│   │   ├── dashboard
-│   │   ├── layout
-│   │   │   └── AdminLayout.tsx
-│   │   ├── portfolio
-│   │   ├── shared
-│   │   └── users
-│   ├── layout
-│   │   └── Container.tsx
-│   ├── navigation
-│   │   ├── MainNav.tsx
-│   │   └── MobileMenu.tsx
-│   ├── portfolio
-│   │   ├── categories
-│   │   │   └── CategoryCard.tsx
-│   │   ├── featured
-│   │   │   └── FeaturedCarousel.tsx
-│   │   └── shared
-│   │       ├── PortfolioGrid.tsx
-│   │       ├── PortfolioList.tsx
-│   │       └── ViewToggle.tsx
-│   ├── sections
-│   │   └── home
-│   │       ├── AboutSection.tsx
-│   │       ├── ContactPreview.tsx
-│   │       ├── HeroSection.tsx
-│   │       └── PortfolioPreview.tsx
-│   └── ui
-│       ├── Button.tsx
-│       ├── Card.tsx
-│       ├── Carousel.tsx
-│       ├── ErrorBoundary.tsx
-│       └── Typography.tsx
+│   ├── providers.tsx
+│   └── utils
+│       ├── azureStorage.ts
+│       ├── clientLogger.ts
+│       ├── dateFormatter.ts
+│       ├── errors
+│       │   └── ProjectErrors.ts
+│       └── logger.ts
 ├── designGuide.md
-├── errorHandling.md
+├── docs
+│   └── admin
+│       └── category-management.md
+├── errorHandler.md
 ├── eslint.config.mjs
 ├── lib
-│   ├── auth.ts
 │   ├── db.ts
-│   ├── imageUpload.ts
-│   ├── mongodb.ts
-│   └── utils.ts
+│   └── errors
+│       ├── AuthErrors.ts
+│       ├── CustomErrors.ts
+│       ├── errorFormatter.ts
+│       └── errorMiddleware.ts
+├── middleware.ts
 ├── models
-│   ├── PortfolioItem.ts
-│   └── User.ts
-├── netlify.toml
+│   ├── Admin.ts
+│   ├── Category.ts
+│   ├── Log.ts
+│   ├── Project.ts
+│   └── WorkExperience.ts
 ├── next-env.d.ts
 ├── next.config.js
-├── next.config.ts
-├── nextItems.md
 ├── overview.md
 ├── package-lock.json
 ├── package.json
@@ -131,20 +161,34 @@ Once done, go back to @errorHandling.md and update it to reflect the progress. U
 ├── public
 │   ├── file.svg
 │   ├── globe.svg
-│   ├── icons
-│   ├── images
-│   │   └── profile.png
 │   ├── next.svg
-│   ├── portfolio
 │   ├── vercel.svg
 │   └── window.svg
+├── scripts
+│   ├── check-categories.js
+│   ├── check-projects.js
+│   ├── check-schema.js
+│   ├── delete-all-projects.js
+│   ├── fix-project-categories.js
+│   ├── fix-project-references.js
+│   ├── init-admin.ts
+│   ├── init-categories-direct.js
+│   ├── init-categories.ts
+│   ├── migrate-categories.ts
+│   ├── migrate-test-to-portfolio.js
+│   ├── migrate-work-experiences.js
+│   ├── test-db.ts
+│   ├── test-mongodb.js
+│   ├── test-project-api.js
+│   ├── test-project-data.js
+│   └── update-category-palettes.js
 ├── struct.md
 ├── tailwind.config.ts
 ├── techstack.md
 ├── tsconfig.json
 └── types
-    ├── mongodb.d.ts
     ├── next-auth.d.ts
-    └── portfolio.ts
+    ├── next.d.ts
+    └── projects.ts
 
-48 directories, 71 files
+51 directories, 106 files
