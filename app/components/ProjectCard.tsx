@@ -1,10 +1,12 @@
 'use client';
 
-import { ProjectCardProps, CategoryType, CategoryConfig } from '../../types/projects';
+import { ProjectCardProps, CategoryType, CategoryConfig, ProjectCategory } from '../../types/projects';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useCategories } from '../hooks/useCategories';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
 import { formatDate } from '../utils/dateFormatter';
+import { useState, useEffect } from 'react';
 
 interface ExtendedCategoryConfig extends CategoryConfig {
   color: string;
@@ -14,9 +16,116 @@ interface ExtendedCategoryConfig extends CategoryConfig {
 
 type CategorySettings = Record<CategoryType, ExtendedCategoryConfig>;
 
+function getCategoryValue(category: string | ProjectCategory): CategoryType {
+  if (typeof category === 'string') {
+    return category as CategoryType;
+  }
+  return category.category;
+}
+
+// Add placeholder icon generator
+function getPlaceholderIcon(category: CategoryType, color: string) {
+  const commonProps = {
+    width: 96,
+    height: 96,
+    className: "rounded-lg object-cover w-full h-full p-2",
+  };
+
+  const icons = {
+    software: (
+      <svg {...commonProps} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="96" height="96" fill="transparent"/>
+        <path d="M30 48L42 60M42 36L30 48L42 36ZM54 60L66 48L54 36" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+    product: (
+      <svg {...commonProps} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="96" height="96" fill="transparent"/>
+        <path d="M48 24L72 36V60L48 72L24 60V36L48 24Z" stroke={color} strokeWidth="4" strokeLinejoin="round"/>
+        <path d="M48 72V48M48 48L72 36M48 48L24 36" stroke={color} strokeWidth="4" strokeLinecap="round"/>
+      </svg>
+    ),
+    content: (
+      <svg {...commonProps} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="96" height="96" fill="transparent"/>
+        <path d="M30 36h36M30 48h36M30 60h24" stroke={color} strokeWidth="4" strokeLinecap="round"/>
+        <rect x="24" y="24" width="48" height="48" rx="4" stroke={color} strokeWidth="4"/>
+      </svg>
+    ),
+    innovation: (
+      <svg {...commonProps} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="96" height="96" fill="transparent"/>
+        <path d="M48 28v40M32 48h32M48 68c6.627 0 12-5.373 12-12s-5.373-12-12-12-12 5.373-12 12 5.373 12 12 12z" stroke={color} strokeWidth="4" strokeLinecap="round"/>
+      </svg>
+    )
+  };
+
+  return icons[category] || icons.software;
+}
+
 export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
   const { categories, loading } = useCategories();
+  const [imageError, setImageError] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   
+  useEffect(() => {
+    async function fetchImageUrl() {
+      if (project.image) {
+        try {
+          console.log('Raw project image data:', project.image);
+          
+          // If image is an object with thumbnail property, use that
+          if (typeof project.image === 'object' && project.image.thumbnail) {
+            console.log('Using thumbnail from image object:', project.image.thumbnail);
+            const imgSrc = project.image.thumbnail;
+            
+            // If it's already a full URL with SAS token, use it directly
+            if (imgSrc.includes('?')) {
+              console.log('Using existing URL with SAS token');
+              setImageUrl(imgSrc);
+            } else {
+              // Get a fresh SAS URL from our API
+              console.log('Fetching fresh SAS URL for:', imgSrc);
+              const fileName = imgSrc.split('/').pop();
+              if (fileName) {
+                const response = await fetch(`/api/admin/get-image-url?fileName=${encodeURIComponent(fileName)}&thumbnail=true`);
+                if (!response.ok) {
+                  throw new Error('Failed to get image URL');
+                }
+                const data = await response.json();
+                console.log('Generated SAS URL:', data.url);
+                setImageUrl(data.url);
+              } else {
+                console.error('Could not extract filename from:', imgSrc);
+                setImageError(true);
+              }
+            }
+          } else if (typeof project.image === 'string') {
+            console.log('Using string image path:', project.image);
+            // Get a fresh SAS URL from our API
+            const response = await fetch(`/api/admin/get-image-url?fileName=${encodeURIComponent(project.image)}&thumbnail=true`);
+            if (!response.ok) {
+              throw new Error('Failed to get image URL');
+            }
+            const data = await response.json();
+            console.log('Generated SAS URL for string path:', data.url);
+            setImageUrl(data.url);
+          } else {
+            console.error('Invalid image data structure:', project.image);
+            setImageError(true);
+          }
+        } catch (error) {
+          console.error('Error processing image URL:', error);
+          setImageError(true);
+        }
+      } else {
+        console.log('No image data available for project:', project.title);
+      }
+    }
+
+    fetchImageUrl();
+  }, [project.image, project.title]);
+
   if (loading) {
     return (
       <div className="rounded-xl p-6 bg-gray-800/50 backdrop-blur-lg animate-pulse">
@@ -65,6 +174,7 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
 
   return (
     <div
+      data-project-id={project._id}
       className="group relative rounded-2xl overflow-hidden transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl"
       style={{
         background: `linear-gradient(135deg, 
@@ -88,7 +198,32 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
       
       {/* Content */}
       <div className="relative p-8 flex flex-col space-y-6">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-6">
+          {/* Project Image */}
+          <div className="w-24 h-24 flex-shrink-0">
+            <div 
+              className="w-full h-full rounded-lg"
+              style={{ backgroundColor: `${activePalette.colors.primary}20` }}
+            >
+              {imageUrl && !imageError ? (
+                <Image
+                  src={imageUrl}
+                  alt={project.title}
+                  width={96}
+                  height={96}
+                  className="rounded-lg object-cover w-full h-full"
+                  unoptimized={true}
+                  onError={(e) => {
+                    console.error('Image failed to load:', imageUrl);
+                    setImageError(true);
+                  }}
+                />
+              ) : (
+                getPlaceholderIcon(categoryType, activePalette.colors.accent)
+              )}
+            </div>
+          </div>
+          
           <div className="flex-1">
             <h3 
               className="text-2xl font-bold mb-3 text-white/90 group-hover:text-white transition-colors duration-300"
@@ -160,7 +295,7 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
         }}
       >
         <div className="flex gap-3 justify-end">
-          <Link href={`/admin/project/add?id=${project._id}&category=${project.category}`}>
+          <Link href={`/admin/project/add?id=${project._id}&category=${categoryType}`}>
             <button
               className="px-6 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 hover:scale-105"
               style={{ 

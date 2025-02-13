@@ -25,7 +25,12 @@ if (!process.env.MONGODB_URI) {
   throw new Error('Please add your MONGODB_URI to .env file');
 }
 
+if (!process.env.MONGODB_DB) {
+  throw new Error('Please add your MONGODB_DB to .env file');
+}
+
 const MONGODB_URI: string = process.env.MONGODB_URI;
+const MONGODB_DB: string = process.env.MONGODB_DB;
 
 const cached: CachedConnection = global.mongoose || {
   conn: null,
@@ -52,6 +57,7 @@ async function connectDB(): Promise<Connection> {
       socketTimeoutMS: 45000,
       connectTimeoutMS: 10000,
       maxPoolSize: 10,
+      dbName: MONGODB_DB // Explicitly set the database name
     };
 
     try {

@@ -33,7 +33,7 @@ async function handleGetProject(request: NextRequest) {
   }
 
   try {
-    const project = await Project.findById(id);
+    const project = await Project.findById(id).populate('category');
 
     if (!project) {
       throw new NotFoundError('Project not found');

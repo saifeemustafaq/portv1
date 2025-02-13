@@ -5,7 +5,12 @@ if (!process.env.MONGODB_URI) {
   throw new Error('Invalid/Missing environment variable: "MONGODB_URI"');
 }
 
+if (!process.env.MONGODB_DB) {
+  throw new Error('Invalid/Missing environment variable: "MONGODB_DB"');
+}
+
 const uri = process.env.MONGODB_URI;
+const dbName = process.env.MONGODB_DB;
 const options = {};
 
 let client;
@@ -20,7 +25,11 @@ if (process.env.NODE_ENV === 'development') {
 
   if (!globalWithMongo._mongoClientPromise) {
     client = new MongoClient(uri, options);
-    globalWithMongo._mongoClientPromise = client.connect();
+    globalWithMongo._mongoClientPromise = client.connect().then(client => {
+      // Explicitly use the portfolio database
+      client.db(dbName);
+      return client;
+    });
     // Run bootstrap after connection in development
     globalWithMongo._mongoClientPromise.then(() => bootstrapCategories());
   }
@@ -28,7 +37,11 @@ if (process.env.NODE_ENV === 'development') {
 } else {
   // In production mode, it's best to not use a global variable.
   client = new MongoClient(uri, options);
-  clientPromise = client.connect();
+  clientPromise = client.connect().then(client => {
+    // Explicitly use the portfolio database
+    client.db(dbName);
+    return client;
+  });
   // Run bootstrap after connection in production
   clientPromise.then(() => bootstrapCategories());
 }

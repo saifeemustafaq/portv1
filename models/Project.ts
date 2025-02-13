@@ -5,7 +5,10 @@ export interface IProject extends mongoose.Document {
   title: string;
   description: string;
   category: mongoose.Types.ObjectId | CategoryType;
-  image?: string;
+  image?: {
+    original: string;
+    thumbnail: string;
+  } | string;
   link?: string;
   tags?: string[];
   skills?: string[];
@@ -40,7 +43,19 @@ const projectSchema = new mongoose.Schema<IProject>({
     }
   },
   image: {
-    type: String,
+    type: mongoose.Schema.Types.Mixed,
+    validate: {
+      validator: function(value: any) {
+        if (typeof value === 'string') return true;
+        if (value && typeof value === 'object') {
+          return value.original && value.thumbnail &&
+                 typeof value.original === 'string' &&
+                 typeof value.thumbnail === 'string';
+        }
+        return false;
+      },
+      message: 'Image must be either a string URL or an object with original and thumbnail URLs'
+    }
   },
   link: {
     type: String,
@@ -63,7 +78,7 @@ const projectSchema = new mongoose.Schema<IProject>({
 });
 
 // Add a pre-save middleware to convert string category to ObjectId
-projectSchema.pre('save', async function() {
+projectSchema.pre('save', async function(this: IProject) {
   if (typeof this.category === 'string') {
     const Category = mongoose.model('Category');
     const categoryDoc = await Category.findOne({ category: this.category });

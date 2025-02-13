@@ -2,6 +2,7 @@
   "name": "port",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
@@ -12,6 +13,7 @@
     "init-categories": "NEXT_RUNTIME=nodejs ts-node -r tsconfig-paths/register scripts/init-categories.ts"
   },
   "dependencies": {
+    "@azure/storage-blob": "^12.26.0",
     "@babel/preset-env": "^7.26.8",
     "@babel/register": "^7.25.9",
     "@types/bcryptjs": "^2.4.6",
@@ -28,6 +30,7 @@
     "react-dom": "^19.0.0",
     "react-icons": "^5.4.0",
     "react-image-crop": "^11.0.7",
+    "sharp": "^0.33.5",
     "sonner": "^1.7.4"
   },
   "devDependencies": {

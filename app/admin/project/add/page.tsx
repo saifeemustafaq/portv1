@@ -10,6 +10,7 @@ import { CategoryType } from '@/types/projects';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
 import { useCategories } from '@/app/hooks/useCategories';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
+import { uploadImage } from '../../../utils/azureStorage';
 
 // Custom error classes
 class ProjectFormError extends Error {
@@ -52,7 +53,10 @@ interface ProjectFormData {
   description: string;
   category: CategoryType;
   link?: string;
-  image?: string;
+  image?: {
+    original: string;
+    thumbnail: string;
+  };
   tags: string[];
   skills: string[];
 }
@@ -149,11 +153,49 @@ function ProjectForm() {
         if (titleInput) titleInput.value = project.title;
         if (descriptionInput) descriptionInput.value = project.description;
         if (linkInput) linkInput.value = project.link || '';
-        if (categorySelect) categorySelect.value = project.category.category || project.category;
+        if (categorySelect) {
+          // Extract category value from populated category field
+          let categoryValue;
+          if (typeof project.category === 'string') {
+            categoryValue = project.category;
+          } else if (project.category && typeof project.category === 'object') {
+            categoryValue = project.category.category;
+          }
+          
+          if (categoryValue && isValidCategory(categoryValue)) {
+            categorySelect.value = categoryValue;
+            setInitialCategory(categoryValue);
+          }
+        }
       }
 
-      setInitialCategory(project.category.category || project.category);
-      setImagePreview(project.image);
+      // Update initial category state
+      let categoryValue;
+      if (typeof project.category === 'string') {
+        categoryValue = project.category;
+      } else if (project.category && typeof project.category === 'object') {
+        categoryValue = project.category.category;
+      }
+      
+      if (categoryValue && isValidCategory(categoryValue)) {
+        setInitialCategory(categoryValue);
+      }
+
+      // Handle image preview based on the image field structure
+      if (project.image) {
+        if (typeof project.image === 'string') {
+          setImagePreview(project.image);
+        } else if (typeof project.image === 'object' && project.image.original) {
+          setImagePreview(project.image.original);
+        } else {
+          // If image data is invalid, clear the preview
+          setImagePreview(null);
+        }
+      } else {
+        // If no image, clear the preview
+        setImagePreview(null);
+      }
+
       setTags(project.tags || []);
       setSkills(project.skills || []);
     } catch (error) {
@@ -330,12 +372,64 @@ function ProjectForm() {
         throw new ValidationError('Invalid category selected', 'category');
       }
 
+      let imageUrls;
+
+      // If we have an image preview
+      if (imagePreview) {
+        // If it's a data URL (new image or placeholder), process it
+        if (imagePreview.startsWith('data:image')) {
+          // Convert base64 to file
+          const base64Data = imagePreview.replace(/^data:image\/\w+;base64,/, '');
+          const byteCharacters = atob(base64Data);
+          const byteArrays = [];
+          
+          for (let offset = 0; offset < byteCharacters.length; offset += 1024) {
+            const slice = byteCharacters.slice(offset, offset + 1024);
+            const byteNumbers = new Array(slice.length);
+            for (let i = 0; i < slice.length; i++) {
+              byteNumbers[i] = slice.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            byteArrays.push(byteArray);
+          }
+          
+          const blob = new Blob(byteArrays, { type: 'image/jpeg' });
+          const file = new File([blob], 'image.jpg', { type: 'image/jpeg' });
+
+          // Create form data for upload
+          const uploadFormData = new FormData();
+          uploadFormData.append('file', file);
+
+          // Upload to server
+          const uploadResponse = await fetch('/api/admin/upload', {
+            method: 'POST',
+            body: uploadFormData
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error('Failed to upload image');
+          }
+
+          const uploadData = await uploadResponse.json();
+          imageUrls = uploadData.urls;
+        } else {
+          // If it's a URL (existing image), keep it as is
+          imageUrls = {
+            original: imagePreview,
+            thumbnail: imagePreview.replace('/originals/', '/thumbnails/')
+          };
+        }
+      } else {
+        // If no image, clear the preview
+        setImagePreview(null);
+      }
+
       const projectData: ProjectFormData = {
         title: formData.get('title') as string,
         description: formData.get('description') as string,
         category: categoryValue as CategoryType,
         link: formData.get('link') as string || undefined,
-        image: imagePreview || getRandomPlaceholder(categoryValue as CategoryType),
+        image: imageUrls,
         tags,
         skills
       };
@@ -343,7 +437,7 @@ function ProjectForm() {
       // Log the data being sent for debugging
       console.log('Submitting project data:', {
         ...projectData,
-        imageLength: projectData.image?.length || 0
+        imageUrls
       });
 
       // Validate the data
@@ -519,6 +613,16 @@ function ProjectForm() {
                     width={128}
                     height={128}
                     className="mx-auto h-32 w-32 object-cover rounded-lg"
+                    onError={(e) => {
+                      console.error('Image preview failed to load:', imagePreview);
+                      // Only clear preview if it's not a data URL (placeholder)
+                      if (!imagePreview.startsWith('data:')) {
+                        setImagePreview(null);
+                        setFieldError('image', 'Failed to load image preview');
+                      }
+                    }}
+                    // Allow data URLs for placeholders
+                    unoptimized={imagePreview.startsWith('data:')}
                   />
                   <button
                     type="button"

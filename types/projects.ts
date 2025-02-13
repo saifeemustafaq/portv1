@@ -21,12 +21,17 @@ export interface CategoryConfig {
   icon?: ReactNode;
 }
 
+export interface ProjectImage {
+  original: string;
+  thumbnail: string;
+}
+
 export interface Project {
   _id: string;
   title: string;
   description: string;
   category: ProjectCategory;
-  image?: string;
+  image?: string | ProjectImage;
   link?: string;
   tags?: string[];
   skills?: string[];
