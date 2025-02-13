@@ -112,7 +112,7 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
 
   return (
     <div 
-      className="overflow-hidden rounded-lg transition-all duration-300 hover:scale-[1.02] relative group"
+      className="flex flex-col min-h-[600px] overflow-hidden rounded-lg transition-all duration-300 hover:scale-[1.02] relative group"
       style={{ 
         background: `linear-gradient(to bottom, 
           ${activePalette.colors.primary}10,
@@ -122,84 +122,94 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
       }}
     >
       {/* Project Image */}
-      <div className="relative aspect-video">
-        {imageUrl ? (
-          <Image
-            src={imageUrl}
-            alt={project.title}
-            fill
-            className="object-cover"
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <div 
-            className="w-full h-full flex items-center justify-center bg-gradient-to-br"
-            style={{
-              background: `linear-gradient(135deg, 
-                ${activePalette.colors.primary}20 0%, 
-                ${activePalette.colors.primary}10 100%
-              )`
-            }}
-          >
-            <span className="text-[#94a3b8] text-sm">No image available</span>
-          </div>
-        )}
+      <div className="relative w-full flex justify-center p-4 shrink-0 bg-gradient-to-br"
+           style={{
+             background: `linear-gradient(135deg, 
+               ${activePalette.colors.primary}20 0%, 
+               ${activePalette.colors.primary}10 100%
+             )`
+           }}>
+        <div className="relative w-48 h-48 rounded-lg overflow-hidden">
+          {imageUrl ? (
+            <Image
+              src={imageUrl}
+              alt={project.title}
+              fill
+              className="object-contain bg-black/20"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <div 
+              className="w-full h-full flex items-center justify-center"
+            >
+              <span className="text-[#94a3b8] text-sm">No image available</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Project Info */}
-      <div className="p-6">
-        <h3 
-          className="text-xl font-semibold mb-2 line-clamp-2"
-          style={{ color: activePalette.colors.accent }}
-        >
-          {project.title}
-        </h3>
-        <p className="text-[#94a3b8] text-sm line-clamp-3 mb-4">
-          {project.description}
-        </p>
+      <div className="flex flex-col flex-grow p-6 space-y-4 overflow-y-auto">
+        <div className="space-y-3">
+          <h3 
+            className="text-xl font-semibold break-words"
+            style={{ color: activePalette.colors.accent }}
+          >
+            {project.title}
+          </h3>
+          <p className="text-[#94a3b8] text-sm whitespace-pre-wrap break-words">
+            {project.description}
+          </p>
+        </div>
 
         {/* Tags */}
         {project.tags && project.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {project.tags.map((tag, index) => (
-              <span
-                key={index}
-                className="px-2 py-1 text-xs rounded-full"
-                style={{ 
-                  background: `${activePalette.colors.primary}20`,
-                  color: activePalette.colors.accent,
-                  border: `1px solid ${activePalette.colors.primary}30`
-                }}
-              >
-                {tag}
-              </span>
-            ))}
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium" style={{ color: activePalette.colors.accent }}>Tags</h4>
+            <div className="flex flex-wrap gap-2">
+              {project.tags.map((tag, index) => (
+                <span
+                  key={index}
+                  className="px-2 py-1 text-xs rounded-full break-words"
+                  style={{ 
+                    background: `${activePalette.colors.primary}20`,
+                    color: activePalette.colors.accent,
+                    border: `1px solid ${activePalette.colors.primary}30`
+                  }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Skills */}
         {project.skills && project.skills.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {project.skills.map((skill, index) => (
-              <span
-                key={index}
-                className="px-2 py-1 text-xs rounded-full"
-                style={{ 
-                  background: `${activePalette.colors.secondary}20`,
-                  color: activePalette.colors.accent,
-                  border: `1px solid ${activePalette.colors.secondary}30`
-                }}
-              >
-                {skill}
-              </span>
-            ))}
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium" style={{ color: activePalette.colors.accent }}>Skills</h4>
+            <div className="flex flex-wrap gap-2">
+              {project.skills.map((skill, index) => (
+                <span
+                  key={index}
+                  className="px-2 py-1 text-xs rounded-full break-words"
+                  style={{ 
+                    background: `${activePalette.colors.secondary}20`,
+                    color: activePalette.colors.accent,
+                    border: `1px solid ${activePalette.colors.secondary}30`
+                  }}
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
       {/* Action Buttons */}
       <div 
-        className="p-6 border-t transition-colors duration-300 backdrop-blur-sm"
+        className="p-6 border-t shrink-0 transition-colors duration-300 backdrop-blur-sm"
         style={{ 
           borderColor: `${activePalette.colors.primary}20`,
           background: `linear-gradient(to top, 
