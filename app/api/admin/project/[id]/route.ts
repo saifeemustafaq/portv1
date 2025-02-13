@@ -7,6 +7,7 @@ import { logAction, logError } from '@/app/utils/logger';
 import { AuthenticationError, ValidationError, NotFoundError, DatabaseError } from '@/lib/errors/CustomErrors';
 import { withErrorHandler } from '@/lib/errors/errorMiddleware';
 import { authOptions } from '@/app/api/auth/auth.config';
+import { deleteImage } from '@/app/utils/azureStorage';
 
 async function handleGetProject(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -46,7 +47,7 @@ async function handleGetProject(request: NextRequest) {
   }
 }
 
-async function handleDeleteProject(request: NextRequest) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.email) {
@@ -59,10 +60,7 @@ async function handleDeleteProject(request: NextRequest) {
     throw new DatabaseError('Failed to connect to database', { error });
   }
 
-  const id = request.url.split('/').pop();
-  if (!id) {
-    throw new ValidationError('Project ID is required');
-  }
+  const { id } = params;
 
   // Find the admin user
   const admin = await Admin.findOne({ username: session.user.email });
@@ -70,23 +68,38 @@ async function handleDeleteProject(request: NextRequest) {
     throw new NotFoundError('Admin user not found');
   }
 
-  // Only allow deleting projects created by this admin
-  const project = await Project.findOne({ _id: id, createdBy: admin._id });
-  if (!project) {
-    await logAction('Project deletion failed - not found or unauthorized', { projectId: id });
-    throw new NotFoundError('Project not found or you do not have permission to delete it');
-  }
-
   try {
+    // Find the project first to get its image info
+    const project = await Project.findById(id);
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+
+    // Delete image from Azure storage if it exists
+    if (project.image && typeof project.image === 'object') {
+      try {
+        // Extract filename from URL
+        const fileName = project.image.original.split('/').pop()?.split('?')[0];
+        if (fileName) {
+          await deleteImage(fileName);
+        }
+      } catch (error) {
+        console.error('Failed to delete image from Azure:', error);
+        await logError('system', 'Delete project image error', error as Error);
+        // Continue with project deletion even if image deletion fails
+      }
+    }
+
+    // Delete the project
     await project.deleteOne();
-    
-    await logAction('Project deleted successfully', {
+
+    await logAction('Project deleted', {
       projectId: id,
       projectName: project.title,
       deletedBy: session.user.email
     });
 
-    return NextResponse.json({ success: true, message: 'Project deleted successfully' });
+    return NextResponse.json({ success: true });
   } catch (error) {
     await logError('system', 'Delete project error', error as Error);
     throw new DatabaseError('Failed to delete project', { error });
@@ -178,5 +191,4 @@ async function handleUpdateProject(request: NextRequest) {
 }
 
 export const GET = withErrorHandler(handleGetProject);
-export const DELETE = withErrorHandler(handleDeleteProject);
 export const PUT = withErrorHandler(handleUpdateProject); 

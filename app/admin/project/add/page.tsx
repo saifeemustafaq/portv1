@@ -5,7 +5,6 @@ import { RiUploadCloud2Line, RiCloseLine } from 'react-icons/ri';
 import ImageCropper from '../../../components/ImageCropper';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getRandomPlaceholder } from '../../../utils/placeholderIcons';
 import { CategoryType } from '@/types/projects';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
 import { useCategories } from '@/app/hooks/useCategories';
@@ -86,6 +85,10 @@ function validateProjectData(data: ProjectFormData): void {
     throw new ValidationError('Invalid category selected', 'category');
   }
 
+  if (!data.image || !data.image.original || !data.image.thumbnail) {
+    throw new ValidationError('Project image is required', 'image');
+  }
+
   if (data.link && !URL_REGEX.test(data.link)) {
     throw new ValidationError('Invalid URL format', 'link');
   }
@@ -114,6 +117,7 @@ function ProjectForm() {
   const [showCropper, setShowCropper] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [initialCategory, setInitialCategory] = useState<string>('');
+  const [croppedImage, setCroppedImage] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -225,9 +229,9 @@ function ProjectForm() {
         throw new ValidationError('Image size should be less than 5MB', 'image');
       }
 
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      const allowedTypes = ['image/jpeg', 'image/png'];
       if (!allowedTypes.includes(file.type)) {
-        throw new ValidationError('Only JPEG, PNG, and GIF images are allowed', 'image');
+        throw new ValidationError('Only JPEG and PNG images are allowed', 'image');
       }
 
       setSelectedFile(file);
@@ -243,6 +247,7 @@ function ProjectForm() {
   };
 
   const handleCroppedImage = (croppedImage: string) => {
+    setCroppedImage(croppedImage);
     setImagePreview(croppedImage);
     setShowCropper(false);
     clearErrors();
@@ -362,85 +367,59 @@ function ProjectForm() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     clearErrors();
+    setLoading(true);
 
-    const formData = new FormData(e.currentTarget);
-    const categoryValue = formData.get('category') as string;
-    
     try {
-      // Validate the category is a valid CategoryType
-      if (!isValidCategory(categoryValue)) {
-        throw new ValidationError('Invalid category selected', 'category');
+      const formData = new FormData(e.currentTarget as HTMLFormElement);
+      const title = formData.get('title') as string;
+      const description = formData.get('description') as string;
+      const category = formData.get('category') as string;
+      const link = formData.get('link') as string;
+
+      // Check if we have a selected file or existing image
+      if (!selectedFile && !imagePreview) {
+        throw new ValidationError('Project image is required', 'image');
       }
 
-      let imageUrls;
+      let imageUrls: { original: string; thumbnail: string } | undefined;
 
-      // If we have an image preview
-      if (imagePreview) {
-        // If it's a data URL (new image or placeholder), process it
-        if (imagePreview.startsWith('data:image')) {
-          // Convert base64 to file
-          const base64Data = imagePreview.replace(/^data:image\/\w+;base64,/, '');
-          const byteCharacters = atob(base64Data);
-          const byteArrays = [];
+      if (selectedFile && croppedImage) {
+        try {
+          // Convert base64 data URL to base64 string
+          const base64Data = croppedImage.split(',')[1];
           
-          for (let offset = 0; offset < byteCharacters.length; offset += 1024) {
-            const slice = byteCharacters.slice(offset, offset + 1024);
-            const byteNumbers = new Array(slice.length);
-            for (let i = 0; i < slice.length; i++) {
-              byteNumbers[i] = slice.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            byteArrays.push(byteArray);
-          }
-          
-          const blob = new Blob(byteArrays, { type: 'image/jpeg' });
-          const file = new File([blob], 'image.jpg', { type: 'image/jpeg' });
+          // Generate a unique filename
+          const timestamp = Date.now();
+          const extension = selectedFile.name.split('.').pop() || 'jpg';
+          const fileName = `project-${timestamp}.${extension}`;
 
-          // Create form data for upload
-          const uploadFormData = new FormData();
-          uploadFormData.append('file', file);
-
-          // Upload to server
-          const uploadResponse = await fetch('/api/admin/upload', {
-            method: 'POST',
-            body: uploadFormData
-          });
-
-          if (!uploadResponse.ok) {
-            throw new Error('Failed to upload image');
-          }
-
-          const uploadData = await uploadResponse.json();
-          imageUrls = uploadData.urls;
-        } else {
-          // If it's a URL (existing image), keep it as is
+          const uploadResult = await uploadImage(base64Data, fileName);
           imageUrls = {
-            original: imagePreview,
-            thumbnail: imagePreview.replace('/originals/', '/thumbnails/')
+            original: uploadResult.originalUrl,
+            thumbnail: uploadResult.thumbnailUrl
           };
+        } catch (error) {
+          console.error('Error uploading image:', error);
+          throw new NetworkError('Failed to upload image. Please try again.');
         }
-      } else {
-        // If no image, clear the preview
-        setImagePreview(null);
+      } else if (imagePreview) {
+        // If we have an existing image preview but no new file
+        imageUrls = {
+          original: imagePreview,
+          thumbnail: imagePreview
+        };
       }
 
       const projectData: ProjectFormData = {
-        title: formData.get('title') as string,
-        description: formData.get('description') as string,
-        category: categoryValue as CategoryType,
-        link: formData.get('link') as string || undefined,
+        title,
+        description,
+        category: category as CategoryType,
+        link: link || undefined,
         image: imageUrls,
         tags,
-        skills
+        skills,
       };
 
-      // Log the data being sent for debugging
-      console.log('Submitting project data:', {
-        ...projectData,
-        imageUrls
-      });
-
-      // Validate the data
       validateProjectData(projectData);
 
       const endpoint = projectId ? `/api/admin/project/${projectId}` : '/api/admin/project';
@@ -461,7 +440,9 @@ function ProjectForm() {
       }
 
       setSuccess('Project saved successfully!');
-      router.push('/admin/dashboard');
+      setTimeout(() => {
+        router.push(`/admin/${projectData.category}`);
+      }, 1500);
     } catch (error) {
       if (error instanceof ValidationError) {
         setFieldError(error.field || 'form', error.message);
@@ -471,6 +452,8 @@ function ProjectForm() {
         setError('Failed to save project. Please try again.');
       }
       console.error('Error saving project:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -545,7 +528,7 @@ function ProjectForm() {
         </p>
       </div>
 
-      <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-8">
         {error && (
           <div className="bg-red-500/10 text-red-400 text-sm text-center py-2 px-4 rounded-lg border border-red-500/20">
             {error}
@@ -597,71 +580,69 @@ function ProjectForm() {
           )}
         </div>
 
-        <div>
-          <label htmlFor="image" className="block text-sm font-medium text-[#e2e8f0] mb-1">
-            Project Image <span className="text-[#94a3b8]">(Square image recommended)</span>
+        <div className="space-y-2">
+          <label className="block text-[#f8fafc] font-medium">
+            Project Image <span className="text-red-500">*</span>
           </label>
-          <div className={`mt-1 flex justify-center rounded-lg border border-dashed ${
-            fieldErrors.image ? 'border-red-500' : 'border-gray-700'
-          } px-6 py-10`}>
-            <div className="text-center">
-              {imagePreview ? (
-                <div className="relative">
-                  <Image
-                    src={imagePreview}
-                    alt="Preview"
-                    width={128}
-                    height={128}
-                    className="mx-auto h-32 w-32 object-cover rounded-lg"
-                    onError={(e) => {
-                      console.error('Image preview failed to load:', imagePreview);
-                      // Only clear preview if it's not a data URL (placeholder)
-                      if (!imagePreview.startsWith('data:')) {
-                        setImagePreview(null);
-                        setFieldError('image', 'Failed to load image preview');
-                      }
-                    }}
-                    // Allow data URLs for placeholders
-                    unoptimized={imagePreview.startsWith('data:')}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImagePreview(null);
-                      clearErrors();
-                    }}
-                    className="absolute -top-2 -right-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
-                  >
-                    ×
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <RiUploadCloud2Line className="mx-auto h-12 w-12 text-gray-400" />
-                  <div className="mt-4 flex text-sm leading-6 text-gray-400">
+          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-lg border-[#2a2f3e] relative">
+            {showCropper && selectedFile ? (
+              <ImageCropper
+                imageFile={selectedFile}
+                onCroppedImage={handleCroppedImage}
+                onError={handleImageError}
+                onCancel={() => {
+                  setShowCropper(false);
+                  setSelectedFile(null);
+                }}
+              />
+            ) : imagePreview ? (
+              <div className="relative">
+                <Image
+                  src={imagePreview}
+                  alt="Project preview"
+                  width={300}
+                  height={200}
+                  className="object-cover rounded-lg"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImagePreview(null);
+                    setSelectedFile(null);
+                  }}
+                  className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 hover:bg-red-700 transition-colors"
+                >
+                  <RiCloseLine className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-1 text-center">
+                <div className="flex flex-col items-center">
+                  <RiUploadCloud2Line className="w-12 h-12 text-[#94a3b8]" />
+                  <div className="flex text-sm text-[#94a3b8]">
                     <label
-                      htmlFor="image-upload"
-                      className="relative cursor-pointer rounded-md bg-transparent font-semibold text-blue-400 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2 hover:text-blue-300"
+                      htmlFor="file-upload"
+                      className="relative cursor-pointer rounded-md font-medium text-[#3b82f6] hover:text-[#60a5fa] focus-within:outline-none"
                     >
                       <span>Upload an image</span>
                       <input
-                        id="image-upload"
-                        name="image"
+                        id="file-upload"
+                        name="file-upload"
                         type="file"
-                        accept="image/*"
                         className="sr-only"
                         onChange={handleImageChange}
+                        accept="image/jpeg,image/png"
                       />
                     </label>
                     <p className="pl-1">or drag and drop</p>
                   </div>
-                  <p className="text-xs leading-5 text-gray-400">PNG, JPG, GIF up to 5MB</p>
-                </>
-              )}
-            </div>
+                  <p className="text-xs text-[#94a3b8]">PNG or JPG up to 5MB</p>
+                </div>
+              </div>
+            )}
           </div>
           {fieldErrors.image && (
-            <p className="mt-1 text-sm text-red-400">{fieldErrors.image}</p>
+            <p className="text-red-500 text-sm mt-1">{fieldErrors.image}</p>
           )}
         </div>
 
@@ -818,15 +799,6 @@ function ProjectForm() {
           </button>
         </div>
       </form>
-
-      {showCropper && selectedFile && (
-        <ImageCropper
-          imageFile={selectedFile}
-          onCroppedImage={handleCroppedImage}
-          onCancel={() => setShowCropper(false)}
-          onError={handleImageError}
-        />
-      )}
     </div>
   );
 }

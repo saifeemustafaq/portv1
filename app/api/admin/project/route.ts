@@ -141,7 +141,7 @@ async function handleCreateProject(request: NextRequest) {
   const data = await request.json();
   
   // Validate required fields
-  const requiredFields = ['title', 'description', 'category'];
+  const requiredFields = ['title', 'description', 'category', 'image'];
   const missingFields = requiredFields.filter(field => !data[field]);
   if (missingFields.length > 0) {
     throw new ValidationError('Missing required fields', {
@@ -149,6 +149,15 @@ async function handleCreateProject(request: NextRequest) {
         ...acc,
         [field]: `${field} is required`
       }), {})
+    });
+  }
+
+  // Validate image object structure
+  if (!data.image || typeof data.image !== 'object' || !data.image.original || !data.image.thumbnail) {
+    throw new ValidationError('Image must contain both original and thumbnail URLs', {
+      field: 'image',
+      required: ['original', 'thumbnail'],
+      received: data.image
     });
   }
 
@@ -194,7 +203,7 @@ async function handleCreateProject(request: NextRequest) {
     // Create project with category reference
     const project = await Project.create({
       ...data,
-      category: categoryDoc._id,  // Use the category document's ID
+      category: categoryDoc._id,
       createdBy: admin._id
     });
     

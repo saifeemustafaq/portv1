@@ -83,14 +83,27 @@ async function generateSasUrl(containerClient: ContainerClient, blobName: string
   }
 }
 
-export async function uploadImage(file: Buffer, fileName: string): Promise<{ originalUrl: string; thumbnailUrl: string }> {
+export async function uploadImage(file: Buffer | Uint8Array | string, fileName: string): Promise<{ originalUrl: string; thumbnailUrl: string }> {
   try {
+    // Convert input to Buffer if needed
+    const fileBuffer = Buffer.isBuffer(file) ? file : 
+                      file instanceof Uint8Array ? Buffer.from(file) :
+                      Buffer.from(file, 'base64');
+
+    if (!fileBuffer || fileBuffer.length === 0) {
+      throw new Error('Invalid file data provided');
+    }
+
     // Upload original image
     const originalBlobClient = originalsContainerClient.getBlockBlobClient(fileName);
-    await originalBlobClient.upload(file, file.length);
+    await originalBlobClient.uploadData(fileBuffer, {
+      blobHTTPHeaders: {
+        blobContentType: 'image/jpeg'
+      }
+    });
 
     // Create and upload thumbnail
-    const thumbnail = await sharp(file)
+    const thumbnail = await sharp(fileBuffer)
       .resize(300, 300, {
         fit: 'cover',
         position: 'center'
@@ -98,7 +111,11 @@ export async function uploadImage(file: Buffer, fileName: string): Promise<{ ori
       .toBuffer();
 
     const thumbnailBlobClient = thumbnailsContainerClient.getBlockBlobClient(fileName);
-    await thumbnailBlobClient.upload(thumbnail, thumbnail.length);
+    await thumbnailBlobClient.uploadData(thumbnail, {
+      blobHTTPHeaders: {
+        blobContentType: 'image/jpeg'
+      }
+    });
 
     // Generate SAS URLs for both blobs
     return {
@@ -107,7 +124,7 @@ export async function uploadImage(file: Buffer, fileName: string): Promise<{ ori
     };
   } catch (error) {
     console.error('Error uploading to Azure Storage:', error);
-    throw new Error('Failed to upload image');
+    throw new Error(error instanceof Error ? error.message : 'Failed to upload image');
   }
 }
 

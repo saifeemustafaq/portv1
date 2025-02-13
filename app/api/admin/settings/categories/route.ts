@@ -8,6 +8,8 @@ import { CATEGORY_CONFIG } from '@/app/config/categories';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
 import { Types, Document } from 'mongoose';
 import Project from '@/models/Project';
+import { deleteImage } from '@/app/utils/azureStorage';
+import { logAction, logError } from '@/app/utils/logger';
 
 interface ExtendedCategoryConfig {
   title: string;
@@ -195,6 +197,12 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.email) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const { categoryType } = await request.json();
     
@@ -208,12 +216,46 @@ export async function DELETE(request: Request) {
     // First, find the Category document to get its _id
     const categoryDoc = await Category.findOne({ category: categoryType });
     
-    // Delete projects that match either the category string or the category ObjectId
-    const result = await Project.deleteMany({
+    // Find all projects that match the category
+    const projects = await Project.find({
       $or: [
         { category: categoryType },  // Match string category
         { category: categoryDoc?._id }  // Match ObjectId category
       ]
+    });
+
+    // Delete images from Azure storage
+    const deletePromises = projects.map(async (project) => {
+      if (project.image && typeof project.image === 'object') {
+        try {
+          // Extract filename from URL
+          const fileName = project.image.original.split('/').pop()?.split('?')[0];
+          if (fileName) {
+            await deleteImage(fileName);
+          }
+        } catch (error) {
+          console.error('Failed to delete image from Azure:', error);
+          await logError('system', 'Delete project image error', error as Error);
+          // Continue with project deletion even if image deletion fails
+        }
+      }
+    });
+
+    // Wait for all image deletions to complete
+    await Promise.all(deletePromises);
+
+    // Delete the projects
+    const result = await Project.deleteMany({
+      $or: [
+        { category: categoryType },
+        { category: categoryDoc?._id }
+      ]
+    });
+
+    await logAction('Projects deleted', {
+      category: categoryType,
+      count: result.deletedCount,
+      deletedBy: session.user.email
     });
 
     return Response.json({ 
@@ -222,6 +264,7 @@ export async function DELETE(request: Request) {
     });
   } catch (error) {
     console.error('Error deleting projects:', error);
+    await logError('system', 'Delete projects error', error as Error);
     return Response.json({ error: 'Failed to delete projects' }, { status: 500 });
   }
 } 

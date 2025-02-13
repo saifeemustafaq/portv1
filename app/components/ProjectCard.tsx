@@ -66,82 +66,15 @@ function getPlaceholderIcon(category: CategoryType, color: string) {
 export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
   const { categories, loading } = useCategories();
   const [imageError, setImageError] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  
-  useEffect(() => {
-    async function fetchImageUrl() {
-      if (project.image) {
-        try {
-          console.log('Raw project image data:', project.image);
-          
-          // If image is an object with thumbnail property, use that
-          if (typeof project.image === 'object' && project.image.thumbnail) {
-            console.log('Using thumbnail from image object:', project.image.thumbnail);
-            const imgSrc = project.image.thumbnail;
-            
-            // If it's already a full URL with SAS token, use it directly
-            if (imgSrc.includes('?')) {
-              console.log('Using existing URL with SAS token');
-              setImageUrl(imgSrc);
-            } else {
-              // Get a fresh SAS URL from our API
-              console.log('Fetching fresh SAS URL for:', imgSrc);
-              const fileName = imgSrc.split('/').pop();
-              if (fileName) {
-                const response = await fetch(`/api/admin/get-image-url?fileName=${encodeURIComponent(fileName)}&thumbnail=true`);
-                if (!response.ok) {
-                  throw new Error('Failed to get image URL');
-                }
-                const data = await response.json();
-                console.log('Generated SAS URL:', data.url);
-                setImageUrl(data.url);
-              } else {
-                console.error('Could not extract filename from:', imgSrc);
-                setImageError(true);
-              }
-            }
-          } else if (typeof project.image === 'string') {
-            console.log('Using string image path:', project.image);
-            // Get a fresh SAS URL from our API
-            const response = await fetch(`/api/admin/get-image-url?fileName=${encodeURIComponent(project.image)}&thumbnail=true`);
-            if (!response.ok) {
-              throw new Error('Failed to get image URL');
-            }
-            const data = await response.json();
-            console.log('Generated SAS URL for string path:', data.url);
-            setImageUrl(data.url);
-          } else {
-            console.error('Invalid image data structure:', project.image);
-            setImageError(true);
-          }
-        } catch (error) {
-          console.error('Error processing image URL:', error);
-          setImageError(true);
-        }
-      } else {
-        console.log('No image data available for project:', project.title);
-      }
-    }
 
-    fetchImageUrl();
-  }, [project.image, project.title]);
-
-  if (loading) {
-    return (
-      <div className="rounded-xl p-6 bg-gray-800/50 backdrop-blur-lg animate-pulse">
-        <div className="h-6 bg-gray-700/50 rounded w-3/4 mb-4"></div>
-        <div className="h-4 bg-gray-700/50 rounded w-full mb-2"></div>
-        <div className="h-4 bg-gray-700/50 rounded w-2/3"></div>
-      </div>
-    );
-  }
-
+  // Get category settings
   const categoryType = typeof project.category === 'string' 
-    ? project.category as CategoryType
+    ? project.category 
     : project.category.category;
 
-  const categorySettings = (categories as CategorySettings)?.[categoryType];
-  
+  const categorySettings = categories[categoryType];
+
+  // Get color palette
   const palette = categorySettings?.colorPalette 
     ? COLOR_PALETTES.find(p => p.id === categorySettings.colorPalette)
     : COLOR_PALETTES.find(p => {
@@ -172,89 +105,70 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
     }
   };
 
+  // Get image URL
+  const imageUrl = project.image && typeof project.image === 'object' 
+    ? project.image.thumbnail 
+    : null;
+
   return (
-    <div
-      data-project-id={project._id}
-      className="group relative rounded-2xl overflow-hidden transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl"
-      style={{
-        background: `linear-gradient(135deg, 
-          ${activePalette.colors.primary}15 0%, 
-          ${activePalette.colors.primary}05 100%)`,
-        backdropFilter: 'blur(20px)',
-        border: `1px solid ${activePalette.colors.primary}30`,
-        boxShadow: `0 4px 24px -1px ${activePalette.colors.primary}10`,
+    <div 
+      className="overflow-hidden rounded-lg transition-all duration-300 hover:scale-[1.02] relative group"
+      style={{ 
+        background: `linear-gradient(to bottom, 
+          ${activePalette.colors.primary}10,
+          ${activePalette.colors.primary}05
+        )`,
+        border: `1px solid ${activePalette.colors.primary}20`
       }}
     >
-      {/* Glass overlay */}
-      <div 
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-        style={{
-          background: `linear-gradient(135deg, 
-            ${activePalette.colors.primary}20 0%, 
-            ${activePalette.colors.accent}10 100%)`,
-          backdropFilter: 'blur(10px)',
-        }}
-      />
-      
-      {/* Content */}
-      <div className="relative p-8 flex flex-col space-y-6">
-        <div className="flex items-start justify-between gap-6">
-          {/* Project Image */}
-          <div className="w-24 h-24 flex-shrink-0">
-            <div 
-              className="w-full h-full rounded-lg"
-              style={{ backgroundColor: `${activePalette.colors.primary}20` }}
-            >
-              {imageUrl && !imageError ? (
-                <Image
-                  src={imageUrl}
-                  alt={project.title}
-                  width={96}
-                  height={96}
-                  className="rounded-lg object-cover w-full h-full"
-                  unoptimized={true}
-                  onError={(e) => {
-                    console.error('Image failed to load:', imageUrl);
-                    setImageError(true);
-                  }}
-                />
-              ) : (
-                getPlaceholderIcon(categoryType, activePalette.colors.accent)
-              )}
-            </div>
+      {/* Project Image */}
+      <div className="relative aspect-video">
+        {imageUrl ? (
+          <Image
+            src={imageUrl}
+            alt={project.title}
+            fill
+            className="object-cover"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div 
+            className="w-full h-full flex items-center justify-center bg-gradient-to-br"
+            style={{
+              background: `linear-gradient(135deg, 
+                ${activePalette.colors.primary}20 0%, 
+                ${activePalette.colors.primary}10 100%
+              )`
+            }}
+          >
+            <span className="text-[#94a3b8] text-sm">No image available</span>
           </div>
-          
-          <div className="flex-1">
-            <h3 
-              className="text-2xl font-bold mb-3 text-white/90 group-hover:text-white transition-colors duration-300"
-              style={{
-                textShadow: `0 2px 10px ${activePalette.colors.primary}40`
-              }}
-            >
-              {project.title}
-            </h3>
-            <p 
-              className="text-white/70 text-base line-clamp-2 group-hover:text-white/80 transition-colors duration-300"
-            >
-              {project.description}
-            </p>
-          </div>
-        </div>
+        )}
+      </div>
+
+      {/* Project Info */}
+      <div className="p-6">
+        <h3 
+          className="text-xl font-semibold mb-2 line-clamp-2"
+          style={{ color: activePalette.colors.accent }}
+        >
+          {project.title}
+        </h3>
+        <p className="text-[#94a3b8] text-sm line-clamp-3 mb-4">
+          {project.description}
+        </p>
 
         {/* Tags */}
         {project.tags && project.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {project.tags.map((tag) => (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {project.tags.map((tag, index) => (
               <span
-                key={tag}
-                className="text-sm px-4 py-1.5 rounded-full font-medium transition-all duration-300 hover:scale-105"
-                style={{
-                  background: `linear-gradient(135deg, 
-                    ${activePalette.colors.primary}20 0%, 
-                    ${activePalette.colors.primary}10 100%)`,
-                  border: `1px solid ${activePalette.colors.primary}30`,
+                key={index}
+                className="px-2 py-1 text-xs rounded-full"
+                style={{ 
+                  background: `${activePalette.colors.primary}20`,
                   color: activePalette.colors.accent,
-                  backdropFilter: 'blur(5px)',
+                  border: `1px solid ${activePalette.colors.primary}30`
                 }}
               >
                 {tag}
@@ -263,27 +177,27 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
           </div>
         )}
 
-        {/* Metadata */}
-        <div 
-          className="text-sm space-y-2 pt-4 border-t transition-colors duration-300"
-          style={{ borderColor: `${activePalette.colors.primary}20` }}
-        >
-          <div className="flex items-center justify-between text-white/60 group-hover:text-white/70">
-            <span className="flex items-center gap-2">
-              <span className="text-white/50">Created</span> 
-              {formatDate(project.createdAt)}
-            </span>
-            {project.updatedAt && (
-              <span className="flex items-center gap-2">
-                <span className="text-white/50">Updated</span>
-                {formatDate(project.updatedAt)}
+        {/* Skills */}
+        {project.skills && project.skills.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {project.skills.map((skill, index) => (
+              <span
+                key={index}
+                className="px-2 py-1 text-xs rounded-full"
+                style={{ 
+                  background: `${activePalette.colors.secondary}20`,
+                  color: activePalette.colors.accent,
+                  border: `1px solid ${activePalette.colors.secondary}30`
+                }}
+              >
+                {skill}
               </span>
-            )}
+            ))}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Actions */}
+      {/* Action Buttons */}
       <div 
         className="p-6 border-t transition-colors duration-300 backdrop-blur-sm"
         style={{ 

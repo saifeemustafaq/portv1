@@ -5,10 +5,10 @@ export interface IProject extends mongoose.Document {
   title: string;
   description: string;
   category: mongoose.Types.ObjectId | CategoryType;
-  image?: {
+  image: {
     original: string;
     thumbnail: string;
-  } | string;
+  };
   link?: string;
   tags?: string[];
   skills?: string[];
@@ -43,19 +43,17 @@ const projectSchema = new mongoose.Schema<IProject>({
     }
   },
   image: {
-    type: mongoose.Schema.Types.Mixed,
-    validate: {
-      validator: function(value: any) {
-        if (typeof value === 'string') return true;
-        if (value && typeof value === 'object') {
-          return value.original && value.thumbnail &&
-                 typeof value.original === 'string' &&
-                 typeof value.thumbnail === 'string';
-        }
-        return false;
+    type: {
+      original: {
+        type: String,
+        required: true
       },
-      message: 'Image must be either a string URL or an object with original and thumbnail URLs'
-    }
+      thumbnail: {
+        type: String,
+        required: true
+      }
+    },
+    required: true
   },
   link: {
     type: String,

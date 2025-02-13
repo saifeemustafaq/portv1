@@ -31,7 +31,7 @@ export interface Project {
   title: string;
   description: string;
   category: ProjectCategory;
-  image?: string | ProjectImage;
+  image: ProjectImage;
   link?: string;
   tags?: string[];
   skills?: string[];
