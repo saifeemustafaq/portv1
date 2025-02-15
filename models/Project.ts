@@ -34,10 +34,10 @@ const projectSchema = new mongoose.Schema<IProject>({
     ref: 'Category',
     index: true,
     validate: {
-      validator: function(value: any) {
+      validator: function(value: mongoose.Types.ObjectId | string) {
         // Allow both ObjectId and string enum values
-        return mongoose.Types.ObjectId.isValid(value) || 
-               ['product', 'software', 'content', 'innovation'].includes(value);
+        return mongoose.Types.ObjectId.isValid(value.toString()) || 
+               ['product', 'software', 'content', 'innovation'].includes(value.toString());
       },
       message: 'Category must be a valid category ID or type'
     }

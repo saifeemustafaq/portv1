@@ -49,7 +49,7 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
 
   // Get image URL
   const imageUrl = project.image && typeof project.image === 'object' 
-    ? project.image.thumbnail 
+    ? project.image.original 
     : null;
 
   return (
@@ -71,13 +71,15 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
                ${activePalette.colors.primary}10 100%
              )`
            }}>
-        <div className="relative w-48 h-48 rounded-lg overflow-hidden">
+        <div className="relative w-[200px] h-[150px] rounded-lg overflow-hidden">
           {imageUrl ? (
             <Image
               src={imageUrl}
               alt={project.title}
               fill
-              className="object-contain bg-black/20"
+              className="object-cover"
+              sizes="200px"
+              priority
             />
           ) : (
             <div 

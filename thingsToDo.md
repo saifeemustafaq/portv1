@@ -1,0 +1,1 @@
+Add the feature to the workexperience section to add an image or a logo of the company, which will be stored in Azure, and also be displayed in the cards

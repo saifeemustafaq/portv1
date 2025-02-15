@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import { CategoryType } from '@/types/projects';
 
 const categorySchema = new mongoose.Schema({
   category: {
@@ -41,8 +40,7 @@ const categorySchema = new mongoose.Schema({
   timestamps: true,
 });
 
-// Add indexes
-categorySchema.index({ category: 1 });
+// Add indexes (only for enabled since category is already indexed via unique: true)
 categorySchema.index({ enabled: 1 });
 
 export const Category = mongoose.models.Category || mongoose.model('Category', categorySchema);

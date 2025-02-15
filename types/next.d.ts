@@ -1,1 +1,8 @@
-// This file can be empty for now as we're using inline types 
+declare module 'next' {
+  export interface PageProps {
+    params: { [key: string]: string };
+    searchParams?: { [key: string]: string | string[] | undefined };
+  }
+}
+
+export {}; 

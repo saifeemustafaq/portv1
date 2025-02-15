@@ -1,16 +1,13 @@
 import React from 'react';
 import { CategoryType, ProjectCategory } from '@/types/projects';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { ProjectFetchError } from '@/app/utils/errors/ProjectErrors';
 import CategoryPageClient from './CategoryPageClient';
-
-// Helper function to get base URL for API requests
-function getBaseUrl() {
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-}
+import { Metadata } from 'next';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/auth.config';
 
 // Type guard for CategoryType
 function isValidCategory(category: string): category is CategoryType {
@@ -19,42 +16,47 @@ function isValidCategory(category: string): category is CategoryType {
 
 async function getProjects(category: CategoryType) {
   try {
-    const baseUrl = getBaseUrl();
-    const url = new URL(`/api/admin/project`, baseUrl);
-    url.searchParams.set('category', category);
-
     // Get the current request headers
     const headersList = await headers();
     const cookie = headersList.get('cookie');
+    const host = headersList.get('host') || 'localhost:3000';
+    const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
+
+    // Construct absolute URL using headers
+    const url = new URL(`/api/admin/project`, `${protocol}://${host}`);
+    url.searchParams.set('category', category);
 
     const response = await fetch(url, {
       cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
-        // Forward the cookie header if it exists
         ...(cookie ? { Cookie: cookie } : {}),
       },
       credentials: 'include',
     });
     
     if (!response.ok) {
-      // Check if we got redirected to login
       if (response.status === 401) {
         throw new Error('Authentication required - please log in again');
       }
       
-      // Try to parse error as JSON, fallback to text if not JSON
+      const errorText = await response.text();
       let errorMessage;
       try {
-        const errorData = await response.json();
+        const errorData = JSON.parse(errorText);
         errorMessage = errorData.message;
       } catch {
-        errorMessage = await response.text();
+        // If we get HTML back, it's likely a 404 page
+        if (errorText.includes('<!DOCTYPE html>')) {
+          throw new Error('Authentication required - please log in again');
+        }
+        errorMessage = errorText;
       }
       throw new ProjectFetchError(category, errorMessage);
     }
 
-    return response.json();
+    const data = await response.json();
+    return data;
   } catch (error) {
     if (error instanceof ProjectFetchError) {
       throw error;
@@ -63,43 +65,51 @@ async function getProjects(category: CategoryType) {
   }
 }
 
-type Props = {
-  params: { category: string };
-};
+export type GenerateMetadata = ({ params }: { params: { category: string } }) => Promise<Metadata>;
 
-async function Page({ params }: Props) {
-  const { category } = params;
+// Type-safe interface for our page props
+interface CategoryPageProps {
+  params: { category: string };
+  searchParams: { [key: string]: string | string[] | undefined };
+}
+
+// Using a type assertion to work around Next.js 15.1.6 type system bug
+// while maintaining type safety for our component's implementation
+export default async function Page({ params, searchParams }: CategoryPageProps) {
+  // First check authentication
+  const session = await getServerSession(authOptions);
   
-  // Validate category before type assertion
-  if (!isValidCategory(category)) {
+  // Destructure and await params at the start
+  const { category } = await Promise.resolve(params);
+  
+  if (!session?.user?.email) {
+    redirect(`/admin/login?returnUrl=${encodeURIComponent(`/admin/${category}`)}`);
+  }
+
+  // Validate category
+  if (!category || !isValidCategory(category)) {
     notFound();
   }
 
-  const validCategory = category as CategoryType;
-  const config = CATEGORY_CONFIG[validCategory];
+  const config = CATEGORY_CONFIG[category];
   let projects;
   
   try {
-    const response = await getProjects(validCategory);
-    projects = response.projects; // Extract the projects array from the response
+    const response = await getProjects(category);
+    projects = response.projects;
   } catch (error) {
     if (error instanceof Error && error.message.includes('Authentication required')) {
-      // Redirect to login with return URL
-      const returnUrl = `/admin/${validCategory}`;
-      const loginUrl = `/admin/login?returnUrl=${encodeURIComponent(returnUrl)}`;
-      const { redirect } = await import('next/navigation');
-      redirect(loginUrl);
+      redirect(`/admin/login?returnUrl=${encodeURIComponent(`/admin/${category}`)}`);
     }
-    // Let the error boundary handle other errors
     throw error instanceof Error ? error : new Error(String(error));
   }
 
   // Create a ProjectCategory object from the category type and config
   const categoryObject: ProjectCategory = {
-    _id: validCategory,
+    _id: category,
     name: config.title,
     description: config.description,
-    category: validCategory,
+    category: category,
     enabled: true,
     title: config.title,
     createdAt: new Date(),
@@ -116,6 +126,4 @@ async function Page({ params }: Props) {
       <CategoryPageClient projects={projects} category={categoryObject} />
     </div>
   );
-}
-
-export default Page as unknown as (props: Props) => Promise<React.ReactElement>; 
+} 

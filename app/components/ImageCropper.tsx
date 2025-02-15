@@ -16,7 +16,7 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
 export default function ImageCropper({ onCroppedImage, onCancel, imageFile, onError }: ImageCropperProps) {
   const [crop, setCrop] = useState<Crop>({
     unit: 'px',
-    width: 300,
+    width: 400,
     height: 300,
     x: 0,
     y: 0,
@@ -160,7 +160,7 @@ export default function ImageCropper({ onCroppedImage, onCancel, imageFile, onEr
             <ReactCrop
               crop={crop}
               onChange={(c) => setCrop(c)}
-              aspect={1}
+              aspect={4/3}
               className="max-h-[60vh]"
             >
               <Image

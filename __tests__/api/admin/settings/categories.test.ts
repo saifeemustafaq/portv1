@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import Category from '@/models/Category';
 import connectDB from '@/lib/db';
 import { ProjectCategory } from '@/types/projects';
+import { Query } from 'mongoose';
 
 // Mock Next-Auth
 jest.mock('next-auth');
@@ -35,14 +36,14 @@ describe('Category Settings API', () => {
     it('should return categories if authenticated', async () => {
       const mockCategories = [
         {
-          category: 'product',
+          category: 'product' as const,
           title: 'Product Projects',
           description: 'Product related projects',
           color: '#ff0000',
           enabled: true
         },
         {
-          category: 'software',
+          category: 'software' as const,
           title: 'Software Projects',
           description: 'Software development projects',
           color: '#00ff00',
@@ -54,7 +55,7 @@ describe('Category Settings API', () => {
         lean: jest.fn().mockReturnValue({
           exec: jest.fn().mockResolvedValue(mockCategories)
         })
-      } as any);
+      } as unknown as Query<unknown[], unknown>);
 
       const response = await GET();
       expect(response.status).toBe(200);
@@ -79,7 +80,7 @@ describe('Category Settings API', () => {
   });
 
   describe('POST /api/admin/settings/categories', () => {
-    const mockRequest = (body: any) =>
+    const mockRequest = (body: Record<string, unknown>) =>
       new NextRequest('http://localhost', {
         method: 'POST',
         body: JSON.stringify(body)

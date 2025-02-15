@@ -32,7 +32,6 @@ async function fixProjectReferences() {
       console.log(`\nProcessing project: ${project.title}`);
       
       let categoryId = project.category;
-      let needsUpdate = false;
       let matchingCategory = null;
 
       // Convert categoryId to string for comparison
@@ -68,7 +67,6 @@ async function fixProjectReferences() {
         
         if (existingCategory) {
           matchingCategory = existingCategory;
-          needsUpdate = true;
         } else {
           console.log(`⚠️ No matching category found for project: ${project.title}`);
           console.log(`Current category value:`, categoryId);

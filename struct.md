@@ -31,8 +31,11 @@ Once done, go back to @errorHandling.md and update it to reflect the progress. U
 
 Now let's fix all the build errors, run npm run build, and keep on fixing the build errors until you fix them all. Remember, please don't turn of the build errors, rather I want you to fix them permanently. Please note, the error handling code is important to me, so please don't remove it, instead improve it if needed.
 
+Use @approachesUsed.md file to understand what has been done already, and update it with what you will be doing so that we can swiftly fix this build errors
+
 Here is the structure for any reference:
 
+mustafasaifee@Mustafas-MacBook-Air-299 port3 % tree -I 'node_modules|dist|.git'
 .
 ├── README.md
 ├── __tests__
@@ -132,6 +135,7 @@ Here is the structure for any reference:
 │       ├── errors
 │       │   └── ProjectErrors.ts
 │       └── logger.ts
+├── approachesUsed.md
 ├── designGuide.md
 ├── docs
 │   └── admin
@@ -185,10 +189,18 @@ Here is the structure for any reference:
 ├── struct.md
 ├── tailwind.config.ts
 ├── techstack.md
+├── thingsToDo.md
 ├── tsconfig.json
 └── types
     ├── next-auth.d.ts
     ├── next.d.ts
     └── projects.ts
 
-51 directories, 106 files
+51 directories, 108 files
+
+
+The build succeeds when we disable TypeScript errors. This confirms that the issue is purely with TypeScript types and not with the actual functionality.
+
+typescript: {
+    ignoreBuildErrors: true, // Temporarily disable TypeScript error checking during build
+  },

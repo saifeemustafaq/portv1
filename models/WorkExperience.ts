@@ -7,6 +7,12 @@ interface IWorkExperience extends mongoose.Document {
   endDate?: Date;
   isPresent: boolean;
   description: string;
+  website: string;
+  companyLogo: {
+    relativePath: string;
+    original: string;
+    thumbnail: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,6 +46,28 @@ const workExperienceSchema = new mongoose.Schema<IWorkExperience>({
     type: String,
     required: true,
     maxlength: 500
+  },
+  website: {
+    type: String,
+    required: true,
+    maxlength: 200
+  },
+  companyLogo: {
+    type: {
+      relativePath: {
+        type: String,
+        required: true
+      },
+      original: {
+        type: String,
+        required: true
+      },
+      thumbnail: {
+        type: String,
+        required: true
+      }
+    },
+    required: true
   }
 }, {
   timestamps: true

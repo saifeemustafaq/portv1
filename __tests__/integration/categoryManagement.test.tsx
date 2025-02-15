@@ -10,8 +10,8 @@ jest.mock('@/app/hooks/useCategories');
 const mockUseCategories = useCategories as jest.Mock;
 
 // Mock fetch for API calls
-const mockFetch = jest.fn();
-global.fetch = mockFetch as any;
+const mockFetch = jest.fn() as jest.Mock;
+global.fetch = mockFetch as unknown as typeof global.fetch;
 
 describe('Category Management Integration Tests', () => {
   beforeEach(() => {
