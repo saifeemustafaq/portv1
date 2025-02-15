@@ -23,9 +23,7 @@ export async function GET() {
       .sort({ startDate: -1 })
       .toArray();
 
-    console.log('Raw experiences from DB:', JSON.stringify(experiences, null, 2));
-
-    // No need to generate fresh URLs since they are now stored in the database
+    // URLs are now permanent, no need to regenerate them
     return NextResponse.json(experiences || []);
   } catch (error) {
     console.error('Error in GET /api/admin/work-experience:', error);
@@ -48,41 +46,45 @@ export async function POST(request: Request) {
     const isPresent = formData.get('isPresent') === 'true';
     const description = formData.get('description') as string;
     const website = formData.get('website') as string;
-    const logoFile = formData.get('logo') as File;
+    const companyLogo = formData.get('companyLogo') as File;
 
-    if (!companyName || !position || !startDate || !description || (!endDate && !isPresent) || !logoFile || !website) {
-      return new NextResponse('Required fields are missing', { status: 400 });
+    if (!companyName || !position || !startDate || !description) {
+      return new NextResponse('Missing required fields', { status: 400 });
     }
 
-    // Upload logo to Azure Storage
-    const logoBuffer = Buffer.from(await logoFile.arrayBuffer());
-    const fileName = `work-experiences/${Date.now()}-${logoFile.name}`;
-    const { originalUrl, thumbnailUrl } = await uploadImage(logoBuffer, fileName);
+    let companyLogoUrls = null;
+    if (companyLogo) {
+      const buffer = Buffer.from(await companyLogo.arrayBuffer());
+      const fileName = `${Date.now()}-${companyLogo.name}`;
+      companyLogoUrls = await uploadImage(buffer, fileName);
+    }
 
     const client = await clientPromise;
     const db = client.db(process.env.MONGODB_DB);
-    
-    const result = await db.collection('workexperiences').insertOne({
+
+    const workExperience = {
       companyName,
       position,
       startDate: new Date(startDate),
-      endDate: endDate ? new Date(endDate) : undefined,
+      endDate: endDate ? new Date(endDate) : null,
       isPresent,
       description,
       website,
-      companyLogo: {
-        relativePath: fileName,
-        original: originalUrl,
-        thumbnail: thumbnailUrl
-      },
+      companyLogo: companyLogoUrls ? {
+        relativePath: companyLogo.name,
+        original: companyLogoUrls.originalUrl, // This is now a permanent URL
+        thumbnail: companyLogoUrls.thumbnailUrl // This is now a permanent URL
+      } : null,
       createdAt: new Date(),
       updatedAt: new Date()
+    };
+
+    const result = await db.collection('workexperiences').insertOne(workExperience);
+    return NextResponse.json({ 
+      message: 'Work experience created successfully',
+      id: result.insertedId
     });
 
-    return NextResponse.json({ 
-      message: 'Work experience added successfully',
-      id: result.insertedId 
-    });
   } catch (error) {
     console.error('Error in POST /api/admin/work-experience:', error);
     return new NextResponse('Internal Server Error', { status: 500 });

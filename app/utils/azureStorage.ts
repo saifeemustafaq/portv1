@@ -27,57 +27,40 @@ const thumbnailsContainerClient = blobServiceClient.getContainerClient(
   process.env.AZURE_STORAGE_THUMBNAILS_CONTAINER
 );
 
-// Helper function to generate SAS URL for a blob
-async function generateSasUrl(containerClient: ContainerClient, blobName: string): Promise<string> {
+// Ensure containers are configured for public access
+async function ensurePublicContainers() {
   try {
-    console.log('Generating SAS URL for blob:', blobName);
-    
-    // Use the full blob name without cleaning
-    const blobClient = containerClient.getBlobClient(blobName);
-    console.log('Blob URL:', blobClient.url);
-    
-    // Get storage account name and key from connection string
-    const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
-    if (!connectionString) {
-      throw new Error('Azure Storage Connection string not found');
+    // Create containers if they don't exist and set public access
+    for (const containerClient of [originalsContainerClient, thumbnailsContainerClient]) {
+      // First create if not exists
+      await containerClient.createIfNotExists();
+      
+      // Then set the access policy to allow public access to blobs
+      await containerClient.setAccessPolicy('blob');
+      
+      console.log(`Container ${containerClient.containerName} configured for public access`);
     }
-    
-    const accountKey = connectionString.match(/AccountKey=([^;]*)/)?.[1];
-    const accountName = connectionString.match(/AccountName=([^;]*)/)?.[1];
-    
-    if (!accountKey || !accountName) {
-      throw new Error('Invalid Azure Storage Connection string format');
-    }
-
-    // Create SharedKeyCredential
-    const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
-    
-    // Create SAS token that's valid for 24 hours
-    const startsOn = new Date();
-    const expiresOn = new Date(new Date().valueOf() + 24 * 60 * 60 * 1000);
-    
-    const sasOptions = {
-      containerName: containerClient.containerName,
-      blobName: blobName,
-      permissions: BlobSASPermissions.parse("r"), // Read only permission
-      startsOn: startsOn,
-      expiresOn: expiresOn,
-      protocol: SASProtocol.Https
-    };
-
-    // Generate SAS token using SharedKeyCredential
-    const sasToken = generateBlobSASQueryParameters(
-      sasOptions,
-      sharedKeyCredential
-    ).toString();
-
-    const fullUrl = `${blobClient.url}?${sasToken}`;
-    console.log('Generated full URL:', fullUrl);
-    return fullUrl;
   } catch (error) {
-    console.error('Error generating SAS URL:', error);
+    console.error('Error configuring containers:', error);
     throw error;
   }
+}
+
+// Call this function to update container access
+export async function updateContainerAccess(): Promise<void> {
+  try {
+    await ensurePublicContainers();
+    console.log('Successfully updated container access policies');
+  } catch (error) {
+    console.error('Failed to update container access:', error);
+    throw error;
+  }
+}
+
+// Helper function to generate permanent URL for a blob
+function generatePermanentUrl(containerClient: ContainerClient, blobName: string): string {
+  const blobClient = containerClient.getBlobClient(blobName);
+  return blobClient.url;
 }
 
 export async function uploadImage(file: Buffer | Uint8Array | string, fileName: string): Promise<{ originalUrl: string; thumbnailUrl: string }> {
@@ -114,10 +97,10 @@ export async function uploadImage(file: Buffer | Uint8Array | string, fileName: 
       }
     });
 
-    // Generate SAS URLs for both blobs
+    // Generate permanent URLs for both blobs
     return {
-      originalUrl: await generateSasUrl(originalsContainerClient, fileName),
-      thumbnailUrl: await generateSasUrl(thumbnailsContainerClient, fileName)
+      originalUrl: generatePermanentUrl(originalsContainerClient, fileName),
+      thumbnailUrl: generatePermanentUrl(thumbnailsContainerClient, fileName)
     };
   } catch (error) {
     console.error('Error uploading to Azure Storage:', error);
@@ -143,9 +126,8 @@ export async function deleteImage(fileName: string): Promise<void> {
 
 export async function getImageUrl(fileName: string, thumbnail: boolean = false): Promise<string> {
   try {
-    console.log('Getting image URL for:', fileName, 'thumbnail:', thumbnail);
     const containerClient = thumbnail ? thumbnailsContainerClient : originalsContainerClient;
-    return await generateSasUrl(containerClient, fileName);
+    return generatePermanentUrl(containerClient, fileName);
   } catch (error) {
     console.error('Error in getImageUrl:', error);
     throw error;
