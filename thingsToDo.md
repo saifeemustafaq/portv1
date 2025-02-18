@@ -1,1 +1,9 @@
-Add the feature to the workexperience section to add an image or a logo of the company, which will be stored in Azure, and also be displayed in the cards
+workex, remove colorful bg
+
+Single underline for the description highlights
+
+Colors should be applied to the position
+
+Get in touch, remove emoji, add minimalistic black line vector icons instead
+
+change font of Hi I'm to 
