@@ -1,6 +1,6 @@
 'use server';
 
-import { BlobServiceClient, ContainerClient, StorageSharedKeyCredential, generateBlobSASQueryParameters, BlobSASPermissions, SASProtocol } from '@azure/storage-blob';
+import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
 import sharp from 'sharp';
 
 if (!process.env.AZURE_STORAGE_CONNECTION_STRING) {

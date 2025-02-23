@@ -4,6 +4,21 @@ import { authOptions } from '@/app/api/auth/auth.config';
 import clientPromise from '@/app/lib/mongodb';
 import { uploadImage, deleteImage } from '@/app/utils/azureStorage';
 
+interface ProfilePicture {
+  relativePath: string;
+  original: string;
+  thumbnail: string;
+}
+
+interface BasicInfoData {
+  name: string;
+  yearsOfExperience: string;
+  phone: string;
+  email: string;
+  profilePicture?: ProfilePicture;
+  updatedAt: Date;
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -49,7 +64,7 @@ export async function PATCH(request: Request) {
     const client = await clientPromise;
     const db = client.db('portfolio');
     
-    const updateData: any = {
+    const updateData: Partial<BasicInfoData> = {
       name,
       yearsOfExperience,
       phone,

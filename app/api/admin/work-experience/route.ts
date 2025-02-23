@@ -3,7 +3,26 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/auth.config';
 import clientPromise from '@/app/lib/mongodb';
 import mongoose from 'mongoose';
-import { uploadImage, getImageUrl } from '@/app/utils/azureStorage';
+import { uploadImage } from '@/app/utils/azureStorage';
+
+interface CompanyLogo {
+  relativePath: string;
+  original: string;
+  thumbnail: string;
+}
+
+interface WorkExperience {
+  companyName: string;
+  position: string;
+  startDate: Date;
+  endDate?: Date;
+  isPresent: boolean;
+  description: string;
+  website: string;
+  companyLogo?: CompanyLogo | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 if (!process.env.MONGODB_DB) {
   throw new Error('Invalid/Missing environment variable: "MONGODB_DB"');
@@ -151,7 +170,7 @@ export async function PATCH(request: Request) {
       return new NextResponse('Required fields are missing', { status: 400 });
     }
 
-    const updateData: any = {
+    const updateData: Partial<WorkExperience> = {
       companyName,
       position,
       startDate: new Date(startDate),

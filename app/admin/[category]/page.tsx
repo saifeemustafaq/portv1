@@ -70,12 +70,12 @@ export type GenerateMetadata = ({ params }: { params: { category: string } }) =>
 // Type-safe interface for our page props
 interface CategoryPageProps {
   params: { category: string };
-  searchParams: { [key: string]: string | string[] | undefined };
+  _searchParams: { [key: string]: string | string[] | undefined };
 }
 
 // Using a type assertion to work around Next.js 15.1.6 type system bug
 // while maintaining type safety for our component's implementation
-export default async function Page({ params, searchParams }: CategoryPageProps) {
+export default async function Page({ params, _searchParams }: CategoryPageProps) {
   // First check authentication
   const session = await getServerSession(authOptions);
   

@@ -1,9 +1,4 @@
-workex, remove colorful bg
+The website works in npm run dev, but doesnt work in npm run build.
 
-Single underline for the description highlights
-
-Colors should be applied to the position
-
-Get in touch, remove emoji, add minimalistic black line vector icons instead
-
-change font of Hi I'm to 
+add this project:
+https://docs.google.com/document/d/1O26iwWbSjo1zq8vlsVck3k4FInnOEZz_-zMdU1cF3Cw/edit?usp=sharing
