@@ -7,38 +7,111 @@ import { NextRequest } from 'next/server';
 
 type RouteHandler = (request: NextRequest, ...args: unknown[]) => Promise<NextResponse> | NextResponse;
 
-export async function handleError(error: Error | BaseError) {
+interface ErrorContext {
+  requestId: string;
+  path: string;
+  method: string;
+  userAgent: string;
+  ip: string;
+  timestamp: string;
+  correlationId?: string;
+  referrer?: string;
+}
+
+async function getErrorContext(): Promise<ErrorContext> {
   const headersList = await headers();
-  const requestId = headersList.get('x-request-id') || undefined;
-  const path = headersList.get('x-invoke-path') || 'unknown';
-  const method = headersList.get('x-invoke-method') || 'unknown';
-  const userAgent = headersList.get('user-agent') || 'unknown';
-  const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+  const forwardedFor = headersList.get('x-forwarded-for');
+  
+  return {
+    requestId: headersList.get('x-request-id') ?? generateRequestId(),
+    path: headersList.get('x-invoke-path') ?? 'unknown',
+    method: headersList.get('x-invoke-method') ?? 'unknown',
+    userAgent: headersList.get('user-agent') ?? 'unknown',
+    ip: forwardedFor ? forwardedFor.split(',')[0] : 'unknown',
+    timestamp: new Date().toISOString(),
+    correlationId: headersList.get('x-correlation-id') ?? undefined,
+    referrer: headersList.get('referer') ?? undefined,
+  };
+}
+
+function generateRequestId(): string {
+  return `req_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+
+function categorizeError(error: Error): {
+  code: string;
+  status: number;
+  category: 'validation' | 'auth' | 'permission' | 'notFound' | 'server';
+} {
+  if (error instanceof BaseError) {
+    return {
+      code: error.code,
+      status: error.status,
+      category: 'server', // Default to server for BaseError
+    };
+  }
+
+  // Default error categorization
+  if (error.name === 'ValidationError') {
+    return { code: 'VALIDATION_ERROR', status: 400, category: 'validation' };
+  }
+  if (error.name === 'UnauthorizedError') {
+    return { code: 'UNAUTHORIZED', status: 401, category: 'auth' };
+  }
+  if (error.name === 'ForbiddenError') {
+    return { code: 'FORBIDDEN', status: 403, category: 'permission' };
+  }
+  if (error.name === 'NotFoundError') {
+    return { code: 'NOT_FOUND', status: 404, category: 'notFound' };
+  }
+
+  return { code: 'INTERNAL_SERVER_ERROR', status: 500, category: 'server' };
+}
+
+export async function handleError(error: Error | BaseError) {
+  const context = await getErrorContext();
+  const { code, status, category } = categorizeError(error);
 
   // Format the error response
-  const errorResponse = formatError(error, requestId);
+  const errorResponse = formatError(error, context.requestId);
 
-  // Log the error with additional request context
+  // Add error context to the response
+  const enhancedErrorResponse = {
+    ...errorResponse,
+    requestId: context.requestId,
+    timestamp: context.timestamp,
+  };
+
+  // Log the error with additional context
   await logError(
     'system',
-    error instanceof BaseError ? error.code : 'INTERNAL_SERVER_ERROR',
+    `${category.toUpperCase()}_ERROR: ${code}`,
     error,
     {
-      path,
-      method,
-      userAgent,
-      ip,
+      path: context.path,
+      method: context.method,
+      userAgent: context.userAgent,
+      ip: context.ip,
       details: {
-        ...errorResponse,
-        stack: error.stack
+        ...enhancedErrorResponse,
+        stack: error.stack,
+        correlationId: context.correlationId,
+        referrer: context.referrer,
       }
     }
   );
 
   // Return formatted error response
   return NextResponse.json(
-    errorResponse,
-    { status: errorResponse.status }
+    enhancedErrorResponse,
+    { 
+      status,
+      headers: {
+        'X-Request-ID': context.requestId,
+        'X-Error-Code': code,
+        ...(context.correlationId && { 'X-Correlation-ID': context.correlationId }),
+      }
+    }
   );
 }
 

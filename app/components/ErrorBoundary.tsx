@@ -3,34 +3,65 @@
 import React from 'react';
 import { Button } from './ui/button';
 import { ProjectError } from '../utils/errors/ProjectErrors';
+import { logClientError } from '../utils/clientLogger';
+import type { LogCategory } from '../utils/logger';
 
 interface Props {
   children: React.ReactNode;
+  name?: string; // Component/section name for better error tracking
 }
 
 interface State {
   hasError: boolean;
   error: Error | null;
+  errorInfo: React.ErrorInfo | null;
+  componentStack: string | null;
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { 
+      hasError: false, 
+      error: null, 
+      errorInfo: null,
+      componentStack: null
+    };
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    return { 
+      hasError: true, 
+      error,
+      errorInfo: null,
+      componentStack: null
+    };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log error to your error tracking service
-    console.error('Error caught by boundary:', error, errorInfo);
+  async componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // Set the error info in state for rendering
+    this.setState({
+      errorInfo,
+      componentStack: errorInfo.componentStack || null
+    });
+
+    // Log error with enhanced context
+    await logClientError('system' as LogCategory, `Error in ${this.props.name || 'unknown component'}`, error);
+
+    // Log additional component stack trace
+    console.error('Component Stack:', errorInfo.componentStack);
   }
 
   private getErrorMessage(error: Error): string {
     if (error instanceof ProjectError) {
       return error.message;
+    }
+    // Add more specific error type checks here
+    if (error instanceof TypeError) {
+      return 'There was a problem with the data format. Please try again.';
+    }
+    if (error instanceof ReferenceError) {
+      return 'There was a technical issue. Please refresh the page.';
     }
     return 'An unexpected error occurred. Please try again later.';
   }
@@ -39,6 +70,13 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (error instanceof ProjectError) {
       return {
         label: 'Try Again',
+        action: () => window.location.reload(),
+      };
+    }
+    // Add more specific error type actions
+    if (error instanceof TypeError) {
+      return {
+        label: 'Refresh Data',
         action: () => window.location.reload(),
       };
     }
@@ -74,7 +112,17 @@ export class ErrorBoundary extends React.Component<Props, State> {
             Something went wrong
           </h3>
           <p className="mb-4 text-sm text-gray-600">{message}</p>
-          <Button onClick={action}>{label}</Button>
+          <div className="space-y-2">
+            <Button onClick={action} variant="default">{label}</Button>
+            {process.env.NODE_ENV === 'development' && this.state.componentStack && (
+              <details className="mt-4 text-left">
+                <summary className="cursor-pointer text-sm text-gray-500">Technical Details</summary>
+                <pre className="mt-2 max-h-48 overflow-auto rounded bg-gray-100 p-4 text-xs">
+                  {this.state.componentStack}
+                </pre>
+              </details>
+            )}
+          </div>
         </div>
       );
     }

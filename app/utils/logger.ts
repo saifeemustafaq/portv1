@@ -27,7 +27,7 @@ class LogConnectionError extends LoggerError {
 }
 
 export type LogLevel = 'info' | 'warn' | 'error';
-export type LogCategory = 'auth' | 'action' | 'system';
+export type LogCategory = 'auth' | 'action' | 'system' | 'performance';
 
 export interface LogDetails {
   [key: string]: string | number | boolean | null | undefined | Record<string, unknown>;
@@ -58,7 +58,7 @@ const validateLogData = (level: LogLevel, category: LogCategory, data: LogData) 
   if (!['info', 'warn', 'error'].includes(level)) {
     throw new LoggerError('Invalid log level', { level });
   }
-  if (!['auth', 'action', 'system'].includes(category)) {
+  if (!['auth', 'action', 'system', 'performance'].includes(category)) {
     throw new LoggerError('Invalid log category', { category });
   }
   if (data.details && typeof data.details !== 'object') {

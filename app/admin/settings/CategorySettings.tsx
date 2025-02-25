@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { CATEGORY_CONFIG } from '@/app/config/categories';
 import { CategoryConfig, CategoryType } from '@/types/projects';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { toast } from 'sonner';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
+import { logClientError, logClientAction } from '@/app/utils/clientLogger';
+import { ErrorBoundary } from '@/app/components/ErrorBoundary';
 
 interface ExtendedCategoryConfig extends CategoryConfig {
   _id: string;
@@ -20,6 +22,24 @@ interface ConfirmDialogProps {
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
+}
+
+// Error fallback component
+function ErrorFallback({ error, resetErrorBoundary }: { error: Error, resetErrorBoundary: () => void }) {
+  return (
+    <Card className="p-8 bg-[#0f1117] border border-red-500/20 rounded-lg">
+      <div className="flex flex-col items-center justify-center h-40 text-center">
+        <h3 className="text-xl font-semibold text-red-400 mb-2">Something went wrong</h3>
+        <p className="text-[#94a3b8] mb-4">{error.message || 'An unexpected error occurred'}</p>
+        <Button 
+          onClick={resetErrorBoundary}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          Try again
+        </Button>
+      </div>
+    </Card>
+  );
 }
 
 function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }: ConfirmDialogProps) {
@@ -50,7 +70,47 @@ function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }: ConfirmD
   );
 }
 
+// Main component wrapped in error boundary
 export function CategorySettings() {
+  return (
+    <ErrorBoundary name="CategorySettings">
+      <CategorySettingsWithErrorHandling />
+    </ErrorBoundary>
+  );
+}
+
+// Component with custom error handling
+function CategorySettingsWithErrorHandling() {
+  const [hasError, setHasError] = useState(false);
+  const [componentError, setComponentError] = useState<Error | null>(null);
+  
+  // Reset error state
+  const resetError = useCallback(() => {
+    setHasError(false);
+    setComponentError(null);
+  }, []);
+  
+  // If there's an error in this component (not caught by ErrorBoundary)
+  if (hasError && componentError) {
+    return <ErrorFallback error={componentError} resetErrorBoundary={resetError} />;
+  }
+  
+  // Wrap the content in an error handler
+  try {
+    return <CategorySettingsContent />;
+  } catch (err) {
+    if (err instanceof Error && !hasError) {
+      setHasError(true);
+      setComponentError(err);
+      logClientError('system', 'Error in CategorySettings component', err)
+        .catch(loggingError => console.error('Failed to log error:', loggingError));
+    }
+    return <ErrorFallback error={err instanceof Error ? err : new Error('Unknown error')} resetErrorBoundary={resetError} />;
+  }
+}
+
+// Actual content component
+function CategorySettingsContent() {
   const [categories, setCategories] = useState<Record<CategoryType, ExtendedCategoryConfig>>(() => {
     const defaultCategories: Record<CategoryType, ExtendedCategoryConfig> = {
       product: {
@@ -84,6 +144,9 @@ export function CategorySettings() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -98,31 +161,64 @@ export function CategorySettings() {
 
   const [selectedCategory, setSelectedCategory] = useState<CategoryType | ''>('');
 
-  useEffect(() => {
-    loadCategories();
-  }, []);
-
-  const loadCategories = async () => {
+  // Load categories with retry mechanism
+  const loadCategories = useCallback(async (retry = false) => {
+    if (retry) {
+      setIsRetrying(true);
+      setRetryCount(prev => prev + 1);
+    } else {
+      setLoading(true);
+      setError(null);
+    }
+    
     try {
       const response = await fetch('/api/admin/settings/categories');
+      
       if (!response.ok) {
-        throw new Error('Failed to load categories');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to load categories: ${response.status}`);
       }
+      
       const data = await response.json();
       setCategories(data.categories);
+      
+      // Reset retry count on success
+      if (retry) {
+        setRetryCount(0);
+        toast.success('Successfully loaded categories');
+      }
+      
+      // Log successful load
+      logClientAction('Categories loaded successfully', {
+        categoryCount: Object.keys(data.categories).length
+      }).catch(error => console.error('Failed to log action:', error));
+      
     } catch (error) {
-      toast.error('Failed to load category settings');
-      console.error('Error loading categories:', error);
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to load category settings';
+      
+      setError(errorMessage);
+      
+      // Log the error
+      logClientError('system', 'Failed to load categories', 
+        error instanceof Error ? error : new Error(errorMessage)
+      ).catch(loggingError => console.error('Failed to log error:', loggingError));
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
+      setIsRetrying(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   const handleColorChange = async (category: CategoryType, colorPalette: string) => {
     try {
-      console.log('Updating color palette:', { category, colorPalette });
-      
-      // Update local state
+      // Update local state optimistically
       setCategories(prev => ({
         ...prev,
         [category]: {
@@ -131,6 +227,12 @@ export function CategorySettings() {
         },
       }));
 
+      // Log the action
+      logClientAction('Updating category color palette', { 
+        category, 
+        colorPalette 
+      }).catch(error => console.error('Failed to log action:', error));
+      
       // Save to database
       const response = await fetch(`/api/admin/settings/categories`, {
         method: 'PATCH',
@@ -146,7 +248,6 @@ export function CategorySettings() {
       });
 
       const data = await response.json();
-      console.log('Server response:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to update category color palette');
@@ -154,11 +255,23 @@ export function CategorySettings() {
 
       toast.success('Color palette updated successfully');
       
-      // Refresh categories to ensure we have the latest data
-      await loadCategories();
+      // Log successful update
+      logClientAction('Category color palette updated successfully', { 
+        category, 
+        colorPalette 
+      }).catch(error => console.error('Failed to log action:', error));
+      
     } catch (error) {
-      console.error('Error updating color palette:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to update color palette');
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to update color palette';
+      
+      // Log the error
+      logClientError('system', 'Failed to update category color palette', 
+        error instanceof Error ? error : new Error(errorMessage)
+      ).catch(loggingError => console.error('Failed to log error:', loggingError));
+      
+      toast.error(errorMessage);
       
       // Revert local state on error
       await loadCategories();
@@ -206,6 +319,13 @@ export function CategorySettings() {
   const saveChanges = async () => {
     try {
       setSaving(true);
+      setError(null);
+      
+      // Log the action
+      logClientAction('Saving category settings', {
+        categoryCount: Object.keys(categories).length
+      }).catch(error => console.error('Failed to log action:', error));
+      
       const response = await fetch('/api/admin/settings/categories', {
         method: 'POST',
         headers: {
@@ -214,14 +334,35 @@ export function CategorySettings() {
         body: JSON.stringify({ categories }),
       });
 
+      const data = await response.json();
+      
       if (!response.ok) {
-        throw new Error('Failed to save categories');
+        throw new Error(data.error || 'Failed to save categories');
       }
 
       toast.success('Category settings saved successfully');
+      
+      // Log successful save
+      logClientAction('Category settings saved successfully', {
+        categoryCount: Object.keys(categories).length
+      }).catch(error => console.error('Failed to log action:', error));
+      
     } catch (error) {
-      toast.error('Failed to save category settings');
-      console.error('Error saving categories:', error);
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to save category settings';
+      
+      setError(errorMessage);
+      
+      // Log the error
+      logClientError('system', 'Failed to save category settings', 
+        error instanceof Error ? error : new Error(errorMessage)
+      ).catch(loggingError => console.error('Failed to log error:', loggingError));
+      
+      toast.error(errorMessage);
+      
+      // Reload categories to ensure UI is in sync with server
+      await loadCategories();
     } finally {
       setSaving(false);
       setConfirmDialog(prev => ({ ...prev, isOpen: false }));
@@ -230,18 +371,48 @@ export function CategorySettings() {
 
   const handleInitializeCategories = async () => {
     try {
+      setLoading(true);
+      setError(null);
+      
+      // Log the action
+      logClientAction('Initializing categories').catch(error => 
+        console.error('Failed to log action:', error)
+      );
+      
       const response = await fetch('/api/admin/settings/categories/init', {
         method: 'POST',
       });
+      
+      const data = await response.json();
+      
       if (!response.ok) {
-        throw new Error('Failed to initialize categories');
+        throw new Error(data.error || 'Failed to initialize categories');
       }
+      
       toast.success('Categories initialized successfully');
+      
+      // Log successful initialization
+      logClientAction('Categories initialized successfully').catch(error => 
+        console.error('Failed to log action:', error)
+      );
+      
       // Reload categories after initialization
       await loadCategories();
     } catch (error) {
-      toast.error('Failed to initialize categories');
-      console.error('Error initializing categories:', error);
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to initialize categories';
+      
+      setError(errorMessage);
+      
+      // Log the error
+      logClientError('system', 'Failed to initialize categories', 
+        error instanceof Error ? error : new Error(errorMessage)
+      ).catch(loggingError => console.error('Failed to log error:', loggingError));
+      
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -252,6 +423,15 @@ export function CategorySettings() {
       message: `Are you sure you want to delete ALL projects in the "${categories[category].title}" category? This action cannot be undone.`,
       onConfirm: async () => {
         try {
+          setSaving(true);
+          setError(null);
+          
+          // Log the action
+          logClientAction('Deleting projects in category', {
+            category,
+            categoryName: categories[category].title
+          }).catch(error => console.error('Failed to log action:', error));
+          
           const response = await fetch('/api/admin/settings/categories', {
             method: 'DELETE',
             headers: {
@@ -260,23 +440,43 @@ export function CategorySettings() {
             body: JSON.stringify({ categoryType: category }),
           });
 
+          const data = await response.json();
+          
           if (!response.ok) {
-            throw new Error('Failed to delete projects');
+            throw new Error(data.error || 'Failed to delete projects');
           }
 
-          const data = await response.json();
           toast.success(`Successfully deleted ${data.deletedCount} projects`);
+          
+          // Log successful deletion
+          logClientAction('Projects deleted successfully', {
+            category,
+            categoryName: categories[category].title,
+            deletedCount: data.deletedCount
+          }).catch(error => console.error('Failed to log action:', error));
+          
         } catch (error) {
-          toast.error('Failed to delete projects');
-          console.error('Error deleting projects:', error);
+          const errorMessage = error instanceof Error 
+            ? error.message 
+            : 'Failed to delete projects';
+          
+          setError(errorMessage);
+          
+          // Log the error
+          logClientError('system', 'Failed to delete projects', 
+            error instanceof Error ? error : new Error(errorMessage)
+          ).catch(loggingError => console.error('Failed to log error:', loggingError));
+          
+          toast.error(errorMessage);
         } finally {
+          setSaving(false);
           setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         }
       },
     });
   };
 
-  if (loading) {
+  if (loading && !isRetrying) {
     return (
       <Card className="p-8 bg-[#0f1117] border border-[#2a2f3e] rounded-lg">
         <div className="flex items-center justify-center h-40">
@@ -286,9 +486,39 @@ export function CategorySettings() {
     );
   }
 
+  if (error && !isRetrying && retryCount === 0) {
+    return (
+      <Card className="p-8 bg-[#0f1117] border border-red-500/20 rounded-lg">
+        <div className="flex flex-col items-center justify-center h-40 text-center">
+          <h3 className="text-xl font-semibold text-red-400 mb-2">Failed to load categories</h3>
+          <p className="text-[#94a3b8] mb-4">{error}</p>
+          <Button 
+            onClick={() => loadCategories(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            Retry
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <>
       <Card className="p-8 bg-[#0f1117] border border-[#2a2f3e] rounded-lg">
+        {isRetrying && (
+          <div className="mb-4 p-2 bg-blue-500/10 text-blue-400 text-sm rounded-lg border border-blue-500/20 flex items-center">
+            <LoadingSpinner className="w-4 h-4 mr-2" />
+            Retrying... Attempt {retryCount}
+          </div>
+        )}
+        
+        {error && !isRetrying && retryCount > 0 && (
+          <div className="mb-4 p-2 bg-amber-500/10 text-amber-400 text-sm rounded-lg border border-amber-500/20">
+            Warning: There was an error loading some data. Some information may be out of date.
+          </div>
+        )}
+        
         <div className="flex justify-between items-center mb-8">
           <div>
             <h2 className="text-2xl font-semibold text-[#f8fafc] serif mb-2">Category Management</h2>
@@ -296,9 +526,17 @@ export function CategorySettings() {
           </div>
           <Button 
             onClick={handleInitializeCategories}
-            className="bg-[#3b82f6] hover:bg-[#2563eb] text-[#f8fafc] transition-colors duration-300"
+            disabled={loading || saving}
+            className="bg-[#3b82f6] hover:bg-[#2563eb] text-[#f8fafc] transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Initialize Categories
+            {loading ? (
+              <div className="flex items-center space-x-2">
+                <LoadingSpinner className="w-4 h-4" />
+                <span>Initializing...</span>
+              </div>
+            ) : (
+              'Initialize Categories'
+            )}
           </Button>
         </div>
         
@@ -343,6 +581,7 @@ export function CategorySettings() {
                           value={category.colorPalette || 'ocean-depths'}
                           onChange={(e) => handleColorChange(key as CategoryType, e.target.value)}
                           className="bg-[#1a1f2e] text-[#f8fafc] border border-[#2a2f3e] rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#3b82f6] focus:border-transparent transition-all duration-300"
+                          disabled={saving}
                         >
                           {COLOR_PALETTES.map((palette) => (
                             <option key={palette.id} value={palette.id}>
@@ -380,6 +619,7 @@ export function CategorySettings() {
                         borderColor: currentPalette.colors.primary,
                         color: category.enabled ? '#f8fafc' : currentPalette.colors.primary,
                       }}
+                      disabled={saving}
                     >
                       {category.enabled ? 'Enabled' : 'Disabled'}
                     </Button>
@@ -404,6 +644,7 @@ export function CategorySettings() {
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value as CategoryType)}
                   className="flex-1 bg-[#0f1117] text-[#f8fafc] px-3 py-2 rounded-md border border-[#2a2f3e] focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
+                  disabled={saving}
                 >
                   <option value="">Select a category</option>
                   {Object.entries(categories).map(([key, category]) => (
@@ -415,10 +656,17 @@ export function CategorySettings() {
 
                 <Button
                   onClick={() => selectedCategory && handleDeleteProjects(selectedCategory as CategoryType)}
-                  disabled={!selectedCategory}
+                  disabled={!selectedCategory || saving}
                   className="bg-red-600 hover:bg-red-500 text-[#f8fafc] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-300"
                 >
-                  Delete All Projects
+                  {saving ? (
+                    <div className="flex items-center space-x-2">
+                      <LoadingSpinner className="w-4 h-4" />
+                      <span>Deleting...</span>
+                    </div>
+                  ) : (
+                    'Delete All Projects'
+                  )}
                 </Button>
               </div>
             </div>
