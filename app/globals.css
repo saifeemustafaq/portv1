@@ -2,20 +2,123 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --border: 240 5.9% 90%;
+    --radius: 0.5rem;
+
+    /* Category Colors */
+    --product: 162 84% 39%;
+    --product-light: 158 64% 52%;
+    --product-dark: 161 93% 30%;
+    
+    --content: 43 97% 47%;
+    --content-light: 48 96% 53%;
+    --content-dark: 43 96% 40%;
+    
+    --software: 343 84% 50%;
+    --software-light: 351 95% 61%;
+    --software-dark: 343 89% 41%;
+    
+    --innovation: 271 84% 56%;
+    --innovation-light: 272 91% 65%;
+    --innovation-dark: 273 83% 47%;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 213 31% 91%;
+    --card: 222 47% 11%;
+    --card-foreground: 213 31% 91%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 215 20.2% 65.1%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground dark;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background-color: hsl(222 47% 15% / 0.5);
+    @apply backdrop-blur-sm border border-white/[0.08] shadow-xl transition-all;
+  }
+
+  .glass-card:hover {
+    background-color: hsl(222 47% 20% / 0.7);
+    @apply border-white/[0.12] shadow-lg;
+  }
+
+  .glass-panel {
+    background-color: hsl(222 47% 15% / 0.7);
+    @apply backdrop-blur-md border border-white/[0.08];
+  }
+
+  /* Category-specific Cards */
+  .category-card {
+    @apply rounded-lg border transition-all duration-300;
+  }
+
+  .product-card {
+    @apply category-card border-product/20 hover:border-product/40 hover:bg-product/5;
+  }
+
+  .content-card {
+    @apply category-card border-content/20 hover:border-content/40 hover:bg-content/5;
+  }
+
+  .software-card {
+    @apply category-card border-software/20 hover:border-software/40 hover:bg-software/5;
+  }
+
+  .innovation-card {
+    @apply category-card border-innovation/20 hover:border-innovation/40 hover:bg-innovation/5;
+  }
+
+  /* Category Badges */
+  .category-badge {
+    @apply px-2 py-1 rounded-md text-xs font-semibold;
+  }
+
+  .product-badge {
+    @apply category-badge bg-product/10 text-product-dark border border-product/20;
+  }
+
+  .content-badge {
+    @apply category-badge bg-content/10 text-content-dark border border-content/20;
+  }
+
+  .software-badge {
+    @apply category-badge bg-software/10 text-software-dark border border-software/20;
+  }
+
+  .innovation-badge {
+    @apply category-badge bg-innovation/10 text-innovation-dark border border-innovation/20;
+  }
 }
