@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
-import { RiUploadCloud2Line, RiCloseLine } from 'react-icons/ri';
+import { RiUploadCloud2Line, RiCloseLine, RiRefreshLine } from 'react-icons/ri';
 import ImageCropper from '../../../components/ImageCropper';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -10,6 +10,8 @@ import { CATEGORY_CONFIG } from '@/app/config/categories';
 import { useCategories } from '@/app/hooks/useCategories';
 import { COLOR_PALETTES } from '@/app/config/colorPalettes';
 import { uploadImage } from '../../../utils/azureStorage';
+import { logClientError, logClientAction } from '@/app/utils/clientLogger';
+import { ErrorBoundary } from '@/app/components/ErrorBoundary';
 
 // Custom error classes
 class ProjectFormError extends Error {
@@ -40,6 +42,7 @@ const MAX_DESCRIPTION_LENGTH = 300;
 const MAX_TAGS = 5;
 const MAX_SKILLS = 5;
 const URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
+const MAX_RETRIES = 3;
 
 interface ProjectFormData {
   title: string;
@@ -96,11 +99,53 @@ function validateProjectData(data: ProjectFormData): void {
   }
 }
 
+// Custom hook for error handling
+function useErrorHandler() {
+  const [error, setError] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  
+  const clearErrors = useCallback(() => {
+    setError('');
+    setFieldErrors({});
+  }, []);
+  
+  const setFieldError = useCallback((field: string, message: string) => {
+    setFieldErrors(prev => ({ ...prev, [field]: message }));
+    // Log field errors for debugging
+    logClientError('system', `Field validation error: ${field}`, new Error(message));
+  }, []);
+  
+  const handleError = useCallback((error: unknown, defaultMessage: string) => {
+    if (error instanceof ValidationError && error.field) {
+      setFieldError(error.field, error.message);
+      return;
+    } else if (error instanceof NetworkError || error instanceof ProjectFormError) {
+      setError(error.message);
+      logClientError('system', 'Project form error', error);
+      return;
+    } else if (error instanceof Error) {
+      setError(error.message || defaultMessage);
+      logClientError('system', 'Unexpected project form error', error);
+      return;
+    }
+    
+    // Handle unknown error types
+    setError(defaultMessage);
+    logClientError('system', 'Unknown project form error', new Error(String(error)));
+  }, [setFieldError]);
+  
+  return {
+    error,
+    fieldErrors,
+    clearErrors,
+    setFieldError,
+    handleError
+  };
+}
+
 function ProjectForm() {
   const { categories, loading: categoriesLoading, error: categoriesError } = useCategories();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>('');
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string>('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
@@ -112,32 +157,30 @@ function ProjectForm() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [initialCategory, setInitialCategory] = useState<string>('');
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get('id');
-
-  const clearErrors = () => {
-    setError('');
-    setFieldErrors({});
-  };
-
-  const setFieldError = (field: string, message: string) => {
-    setFieldErrors(prev => ({ ...prev, [field]: message }));
-  };
+  
+  // Use the custom error handling hook
+  const { error, fieldErrors, clearErrors, setFieldError, handleError } = useErrorHandler();
 
   const fetchProjectData = useCallback(async () => {
     try {
       setLoading(true);
       clearErrors();
+      setIsRetrying(false);
 
       const response = await fetch(`/api/admin/project/${projectId}`);
-      const data = await response.json();
-
+      
       if (!response.ok) {
-        throw new NetworkError(data.message || 'Failed to fetch project');
+        const errorData = await response.json().catch(() => ({ message: `HTTP error ${response.status}` }));
+        throw new NetworkError(errorData.message || 'Failed to fetch project');
       }
 
+      const data = await response.json();
       const project = data.project;
       setIsEditMode(true);
       
@@ -196,23 +239,37 @@ function ProjectForm() {
 
       setTags(project.tags || []);
       setSkills(project.skills || []);
+      
+      // Reset retry count on successful fetch
+      setRetryCount(0);
     } catch (error) {
-      if (error instanceof NetworkError) {
-        setError(error.message);
-      } else {
-        setError('Failed to fetch project data. Please try again.');
-      }
-      console.error('Error fetching project:', error);
+      // Use the error handler
+      handleError(error, 'Failed to fetch project data. Please try again.');
+      
+      // Increment retry count
+      setRetryCount(prev => prev + 1);
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, clearErrors, handleError]);
 
   useEffect(() => {
     if (projectId) {
       void fetchProjectData();
     }
   }, [projectId, fetchProjectData]);
+
+  const handleRetry = () => {
+    if (retryCount < MAX_RETRIES) {
+      setIsRetrying(true);
+      void fetchProjectData();
+    } else {
+      handleError(
+        new NetworkError(`Failed to fetch project data after ${MAX_RETRIES} attempts. Please try again later.`),
+        `Failed to fetch project data after ${MAX_RETRIES} attempts. Please try again later.`
+      );
+    }
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -234,8 +291,12 @@ function ProjectForm() {
     } catch (error) {
       if (error instanceof ValidationError) {
         setFieldError(error.field || 'image', error.message);
+        logClientError('system', 'Image validation error', error);
+      } else if (error instanceof Error) {
+        handleError(error, 'Failed to process image. Please try again.');
+        logClientError('system', 'Unexpected image processing error', error);
       } else {
-        setError('Failed to process image. Please try again.');
+        handleError(new Error(String(error)), 'Failed to process image. Please try again.');
       }
     }
   };
@@ -250,6 +311,7 @@ function ProjectForm() {
   const handleImageError = (error: string) => {
     setFieldError('image', error);
     setShowCropper(false);
+    logClientError('system', 'Image cropping error', new Error(error));
   };
 
   const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -362,6 +424,7 @@ function ProjectForm() {
     e.preventDefault();
     clearErrors();
     setLoading(true);
+    setSuccess('');
 
     try {
       const formData = new FormData(e.currentTarget as HTMLFormElement);
@@ -393,7 +456,11 @@ function ProjectForm() {
             thumbnail: uploadResult.thumbnailUrl
           };
         } catch (error) {
-          console.error('Error uploading image:', error);
+          if (error instanceof Error) {
+            logClientError('system', 'Image upload error', error);
+          } else {
+            logClientError('system', 'Image upload error', new Error(String(error)));
+          }
           throw new NetworkError('Failed to upload image. Please try again.');
         }
       } else if (imagePreview) {
@@ -427,25 +494,27 @@ function ProjectForm() {
         body: JSON.stringify(projectData),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new NetworkError(data.message || 'Failed to save project');
+        const errorData = await response.json().catch(() => ({ message: `HTTP error ${response.status}` }));
+        throw new NetworkError(errorData.message || `Failed to ${isEditMode ? 'update' : 'save'} project`);
       }
 
-      setSuccess('Project saved successfully!');
+      // We don't need to store the response data since we're not using it
+      await response.json();
+      
+      // Log successful operation
+      logClientAction(`Project ${isEditMode ? 'updated' : 'created'} successfully`, { 
+        title: projectData.title,
+        category: projectData.category
+      });
+
+      setSuccess(`Project ${isEditMode ? 'updated' : 'saved'} successfully!`);
       setTimeout(() => {
         router.push(`/admin/${projectData.category}`);
       }, 1500);
     } catch (error) {
-      if (error instanceof ValidationError) {
-        setFieldError(error.field || 'form', error.message);
-      } else if (error instanceof NetworkError) {
-        setError(error.message);
-      } else {
-        setError('Failed to save project. Please try again.');
-      }
-      console.error('Error saving project:', error);
+      // Use the error handler
+      handleError(error, `Failed to ${isEditMode ? 'update' : 'save'} project. Please try again.`);
     } finally {
       setLoading(false);
     }
@@ -503,8 +572,43 @@ function ProjectForm() {
 
   if (categoriesError) {
     return (
-      <div className="flex items-center justify-center h-40">
+      <div className="flex flex-col items-center justify-center h-40 space-y-4">
         <div className="text-red-400">Failed to load categories. Please try again later.</div>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 text-sm font-medium rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-all duration-300 flex items-center gap-2"
+        >
+          <RiRefreshLine className="h-4 w-4" />
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // Show error state with retry option for project fetch errors
+  if (error && projectId && !isRetrying) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <div className="text-red-400 text-center max-w-md">
+          <p className="text-lg font-semibold mb-2">Error</p>
+          <p>{error}</p>
+        </div>
+        {retryCount < MAX_RETRIES && (
+          <button 
+            onClick={handleRetry}
+            className="px-4 py-2 text-sm font-medium rounded-md bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-all duration-300 flex items-center gap-2"
+            disabled={loading}
+          >
+            <RiRefreshLine className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Retrying...' : 'Retry'}
+          </button>
+        )}
+        <button
+          onClick={() => router.push('/admin')}
+          className="px-4 py-2 text-sm font-medium rounded-md bg-gray-700/20 text-gray-300 hover:bg-gray-700/30 transition-all duration-300"
+        >
+          Back to Dashboard
+        </button>
       </div>
     );
   }
@@ -795,17 +899,30 @@ function ProjectForm() {
   );
 }
 
+// Custom ErrorBoundary wrapper with fallback UI
+function ProjectFormErrorBoundary({ children }: { children: React.ReactNode }) {
+  return (
+    <ErrorBoundary name="ProjectForm">
+      <div className="relative">
+        {children}
+      </div>
+    </ErrorBoundary>
+  );
+}
+
 export default function ProjectFormPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-[200px] p-6">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading project form...</p>
+    <ProjectFormErrorBoundary>
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-[200px] p-6">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading project form...</p>
+          </div>
         </div>
-      </div>
-    }>
-      <ProjectForm />
-    </Suspense>
+      }>
+        <ProjectForm />
+      </Suspense>
+    </ProjectFormErrorBoundary>
   );
 } 

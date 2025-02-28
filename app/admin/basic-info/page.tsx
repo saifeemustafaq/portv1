@@ -5,6 +5,7 @@ import { ErrorBoundary } from '@/app/components/ErrorBoundary';
 import { RiEditLine, RiSaveLine, RiAddLine, RiDeleteBin6Line } from 'react-icons/ri';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
+import { logClientError, logClientAction } from '@/app/utils/clientLogger';
 
 interface BasicInfo {
   name: string;
@@ -38,6 +39,7 @@ function BasicInfoContent() {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [basicInfo, setBasicInfo] = useState<BasicInfo>({
     name: '',
     yearsOfExperience: '',
@@ -70,12 +72,13 @@ function BasicInfoContent() {
   const fetchBasicInfo = async () => {
     try {
       setError(null);
+      setIsLoading(true);
       const response = await fetch('/api/admin/basic-info');
       if (!response.ok) {
-        throw new Error('Failed to fetch basic info');
+        const errorData = await response.json().catch(() => ({ message: 'Failed to fetch basic info' }));
+        throw new Error(errorData.message || 'Failed to fetch basic info');
       }
       const data = await response.json();
-      console.log('Fetched basic info:', data); // Debug log
       if (data && typeof data === 'object') {
         setBasicInfo(data);
         setEditedInfo(data);
@@ -83,8 +86,10 @@ function BasicInfoContent() {
         throw new Error('Invalid data format received');
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch basic info';
       console.error('Error fetching basic info:', error);
-      setError(error instanceof Error ? error.message : 'Failed to fetch basic info');
+      setError(errorMessage);
+      logClientError('system', 'Failed to fetch basic info', error instanceof Error ? error : new Error(String(error)));
     } finally {
       setIsLoading(false);
     }
@@ -92,13 +97,21 @@ function BasicInfoContent() {
 
   const fetchWorkExperiences = async () => {
     try {
+      setIsLoading(true);
       const response = await fetch('/api/admin/work-experience');
-      if (response.ok) {
-        const data = await response.json();
-        setWorkExperiences(data);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to fetch work experiences' }));
+        throw new Error(errorData.message || 'Failed to fetch work experiences');
       }
+      const data = await response.json();
+      setWorkExperiences(data);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch work experiences';
       console.error('Error fetching work experiences:', error);
+      logClientError('system', 'Failed to fetch work experiences', error instanceof Error ? error : new Error(String(error)));
+      setToast({ message: errorMessage, type: 'error' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -121,15 +134,21 @@ function BasicInfoContent() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update');
+        const errorData = await response.json().catch(() => ({ message: 'Failed to update basic info' }));
+        throw new Error(errorData.message || 'Failed to update basic info');
       }
 
       const updatedInfo = await response.json();
       setBasicInfo(updatedInfo);
       setIsEditing(false);
       setProfilePictureFile(null);
+      setToast({ message: 'Basic info updated successfully', type: 'success' });
+      logClientAction('Basic info updated successfully', { status: 'success' });
     } catch (error) {
-      console.error('Error saving:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update basic info';
+      console.error('Error saving basic info:', error);
+      logClientError('system', 'Failed to update basic info', error instanceof Error ? error : new Error(String(error)));
+      setToast({ message: errorMessage, type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -166,8 +185,8 @@ function BasicInfoContent() {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Failed to add work experience');
+        const errorData = await response.json().catch(() => ({ message: 'Failed to add work experience' }));
+        throw new Error(errorData.message || 'Failed to add work experience');
       }
 
       await fetchWorkExperiences();
@@ -182,9 +201,13 @@ function BasicInfoContent() {
         website: ''
       });
       setLogoFile(null);
+      setToast({ message: 'Work experience added successfully', type: 'success' });
+      logClientAction('Work experience added', { company: newExperience.companyName });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add work experience';
       console.error('Error adding work experience:', error);
-      alert(error instanceof Error ? error.message : 'Failed to add work experience');
+      logClientError('system', 'Failed to add work experience', error instanceof Error ? error : new Error(String(error)));
+      setToast({ message: errorMessage, type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -198,12 +221,18 @@ function BasicInfoContent() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete work experience');
+        const errorData = await response.json().catch(() => ({ message: 'Failed to delete work experience' }));
+        throw new Error(errorData.message || 'Failed to delete work experience');
       }
 
       await fetchWorkExperiences();
+      setToast({ message: 'Work experience deleted successfully', type: 'success' });
+      logClientAction('Work experience deleted', { id });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete work experience';
       console.error('Error deleting work experience:', error);
+      logClientError('system', 'Failed to delete work experience', error instanceof Error ? error : new Error(String(error)));
+      setToast({ message: errorMessage, type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -234,16 +263,21 @@ function BasicInfoContent() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update work experience');
+        const errorData = await response.json().catch(() => ({ message: 'Failed to update work experience' }));
+        throw new Error(errorData.message || 'Failed to update work experience');
       }
 
       await fetchWorkExperiences();
       setEditingExperience(null);
       setEditedExperience(null);
       setEditLogoFile(null);
+      setToast({ message: 'Work experience updated successfully', type: 'success' });
+      logClientAction('Work experience updated', { id: editedExperience._id });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update work experience';
       console.error('Error updating work experience:', error);
-      alert(error instanceof Error ? error.message : 'Failed to update work experience');
+      logClientError('system', 'Failed to update work experience', error instanceof Error ? error : new Error(String(error)));
+      setToast({ message: errorMessage, type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -267,6 +301,20 @@ function BasicInfoContent() {
 
   return (
     <div className="space-y-8 p-6">
+      {toast && (
+        <div className={`fixed top-4 right-4 p-4 rounded-lg ${
+          toast.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+          : 'bg-red-500/10 text-red-400 border border-red-500/20'
+        }`}>
+          {toast.message}
+          <button 
+            onClick={() => setToast(null)}
+            className="ml-2 text-sm opacity-70 hover:opacity-100"
+          >
+            ×
+          </button>
+        </div>
+      )}
       <div className="glass-panel rounded-lg p-6">
         <h1 className="text-3xl font-bold tracking-tight text-white">
           Basic Information
@@ -764,7 +812,9 @@ function BasicInfoContent() {
 export default function BasicInfoPage() {
   return (
     <ErrorBoundary>
-      <BasicInfoContent />
+      <div className="error-boundary-container">
+        <BasicInfoContent />
+      </div>
     </ErrorBoundary>
   );
 } 

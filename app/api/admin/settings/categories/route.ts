@@ -10,6 +10,8 @@ import { Document } from 'mongoose';
 import Project from '@/models/Project';
 import { deleteImage } from '@/app/utils/azureStorage';
 import { logAction, logError } from '@/app/utils/logger';
+import { handleError } from '@/lib/errors/errorMiddleware';
+import { ValidationError, AuthorizationError, DatabaseError, BaseError } from '@/lib/errors/CustomErrors';
 
 interface ExtendedCategoryConfig {
   title: string;
@@ -20,7 +22,7 @@ interface ExtendedCategoryConfig {
   _id: string;
 }
 
-interface CategoryDocument extends Document {
+interface _CategoryDocument extends Document {
   title: string;
   description: string;
   category: CategoryType;
@@ -43,12 +45,22 @@ const getDefaultColorPalette = (categoryType: CategoryType): string => {
   }
 };
 
+// Validate category type
+const validateCategoryType = (categoryType: string): categoryType is CategoryType => {
+  return ['product', 'software', 'content', 'innovation'].includes(categoryType);
+};
+
+// Validate color palette
+const validateColorPalette = (palette: string): boolean => {
+  return COLOR_PALETTES.some(p => p.id === palette);
+};
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      throw new AuthorizationError('Unauthorized access to category settings');
     }
 
     await connectDB();
@@ -70,7 +82,8 @@ export async function GET() {
       return NextResponse.json({ categories: defaultCategories });
     }
     
-    const formattedCategories = categories.reduce((acc, cat: CategoryDocument) => {
+    // Use type assertion to handle the mongoose type issue
+    const formattedCategories = categories.reduce((acc, cat) => {
       if (cat && cat.category) {
         const categoryType = cat.category as CategoryType;
         acc[categoryType] = {
@@ -85,13 +98,14 @@ export async function GET() {
       return acc;
     }, {} as Record<CategoryType, ExtendedCategoryConfig>);
 
+    await logAction('Category settings retrieved', {
+      userId: session.user?.email || 'unknown',
+      categoriesCount: Object.keys(formattedCategories).length
+    });
+
     return NextResponse.json({ categories: formattedCategories });
   } catch (error) {
-    console.error('Error fetching category settings:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch category settings' },
-      { status: 500 }
-    );
+    return handleError(error as Error | BaseError);
   }
 }
 
@@ -100,114 +114,147 @@ export async function POST(request: Request) {
     const session = await getServerSession(authOptions);
     
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      throw new AuthorizationError('Unauthorized access to update category settings');
     }
 
-    const { categories } = await request.json() as {
-      categories: Record<CategoryType, ExtendedCategoryConfig>
+    const body = await request.json();
+    
+    if (!body.categories) {
+      throw new ValidationError('Categories data is required');
+    }
+
+    const { categories } = body as {
+      categories: Record<string, ExtendedCategoryConfig>
     };
+
+    // Validate categories data
+    for (const [categoryKey, config] of Object.entries(categories)) {
+      if (!validateCategoryType(categoryKey)) {
+        throw new ValidationError(`Invalid category type: ${categoryKey}`);
+      }
+      
+      if (config.colorPalette && !validateColorPalette(config.colorPalette)) {
+        throw new ValidationError(`Invalid color palette for ${categoryKey}: ${config.colorPalette}`);
+      }
+      
+      if (!config.title || config.title.trim() === '') {
+        throw new ValidationError(`Title is required for category: ${categoryKey}`);
+      }
+    }
 
     await connectDB();
 
     // Update each category
     for (const [categoryKey, config] of Object.entries(categories)) {
-      await Category.findOneAndUpdate(
-        { category: categoryKey },
-        {
-          $set: {
-            title: config.title,
-            description: config.description,
-            enabled: config.enabled,
-            colorPalette: config.colorPalette,
-          }
-        },
-        { upsert: true }
-      );
+      try {
+        await Category.findOneAndUpdate(
+          { category: categoryKey },
+          {
+            $set: {
+              title: config.title,
+              description: config.description,
+              enabled: config.enabled,
+              colorPalette: config.colorPalette,
+            }
+          },
+          { upsert: true }
+        );
+      } catch (err) {
+        throw new DatabaseError(`Failed to update category: ${categoryKey}`, { cause: err });
+      }
     }
+
+    await logAction('Category settings updated', {
+      userId: session.user?.email || 'unknown',
+      updatedCategories: Object.keys(categories).join(',')
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error saving category settings:', error);
-    return NextResponse.json(
-      { error: 'Failed to save category settings' },
-      { status: 500 }
-    );
+    return handleError(error as Error | BaseError);
   }
 }
 
 export async function PATCH(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session) {
+      throw new AuthorizationError('Unauthorized access to update category');
+    }
+
     await connectDB();
-    const { categoryType, updates } = await request.json();
-    console.log('PATCH Request:', { categoryType, updates });
+    const body = await request.json();
+    
+    if (!body.categoryType || !body.updates) {
+      throw new ValidationError('Category type and updates are required');
+    }
+    
+    const { categoryType, updates } = body;
 
     // Validate that this is a valid category type
-    if (!['product', 'software', 'content', 'innovation'].includes(categoryType)) {
-      console.log('Invalid category type:', categoryType);
-      return NextResponse.json(
-        { error: 'Invalid category type' },
-        { status: 400 }
-      );
+    if (!validateCategoryType(categoryType)) {
+      throw new ValidationError(`Invalid category type: ${categoryType}`);
     }
 
     // Validate color palette if it's being updated
-    if (updates.colorPalette) {
-      const validPalette = COLOR_PALETTES.find(p => p.id === updates.colorPalette);
-      console.log('Color Palette Validation:', {
-        requestedPalette: updates.colorPalette,
-        valid: !!validPalette,
-        availablePalettes: COLOR_PALETTES.map(p => p.id)
+    if (updates.colorPalette && !validateColorPalette(updates.colorPalette)) {
+      throw new ValidationError(`Invalid color palette: ${updates.colorPalette}`);
+    }
+
+    // Validate title if it's being updated
+    if (updates.title !== undefined && (!updates.title || updates.title.trim() === '')) {
+      throw new ValidationError('Title cannot be empty');
+    }
+
+    try {
+      const category = await Category.findOneAndUpdate(
+        { category: categoryType },
+        { $set: updates },
+        { new: true }
+      );
+
+      if (!category) {
+        throw new ValidationError(`Category not found: ${categoryType}`);
+      }
+
+      await logAction('Category updated', {
+        userId: session.user?.email || 'unknown',
+        categoryType,
+        updatedFields: Object.keys(updates).join(',')
       });
 
-      if (!validPalette) {
-        return NextResponse.json(
-          { error: 'Invalid color palette selected' },
-          { status: 400 }
-        );
+      return NextResponse.json(category);
+    } catch (err) {
+      if (err instanceof ValidationError) {
+        throw err;
       }
+      throw new DatabaseError(`Failed to update category: ${categoryType}`, { cause: err });
     }
-
-    const category = await Category.findOneAndUpdate(
-      { category: categoryType },
-      { $set: updates },
-      { new: true }
-    );
-
-    console.log('Updated Category:', {
-      categoryType,
-      updates,
-      result: category
-    });
-
-    if (!category) {
-      return NextResponse.json(
-        { error: 'Category not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(category);
   } catch (error) {
-    console.error('Error updating category:', error);
-    return NextResponse.json(
-      { error: 'Failed to update category' },
-      { status: 500 }
-    );
+    return handleError(error as Error | BaseError);
   }
 }
 
 export async function DELETE(request: Request) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.email) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
-    const { categoryType } = await request.json();
+    const session = await getServerSession(authOptions);
     
-    if (!categoryType) {
-      return Response.json({ error: 'Category type is required' }, { status: 400 });
+    if (!session?.user?.email) {
+      throw new AuthorizationError('Unauthorized access to delete projects');
+    }
+
+    const body = await request.json();
+    
+    if (!body.categoryType) {
+      throw new ValidationError('Category type is required');
+    }
+
+    const { categoryType } = body;
+    
+    // Validate that this is a valid category type
+    if (!validateCategoryType(categoryType)) {
+      throw new ValidationError(`Invalid category type: ${categoryType}`);
     }
 
     // Connect to MongoDB
@@ -215,6 +262,10 @@ export async function DELETE(request: Request) {
 
     // First, find the Category document to get its _id
     const categoryDoc = await Category.findOne({ category: categoryType });
+    
+    if (!categoryDoc) {
+      throw new ValidationError(`Category not found: ${categoryType}`);
+    }
     
     // Find all projects that match the category
     const projects = await Project.find({
@@ -234,37 +285,38 @@ export async function DELETE(request: Request) {
             await deleteImage(fileName);
           }
         } catch (error) {
-          console.error('Failed to delete image from Azure:', error);
           await logError('system', 'Delete project image error', error as Error);
           // Continue with project deletion even if image deletion fails
         }
       }
     });
 
-    // Wait for all image deletions to complete
-    await Promise.all(deletePromises);
+    try {
+      // Wait for all image deletions to complete
+      await Promise.all(deletePromises);
 
-    // Delete the projects
-    const result = await Project.deleteMany({
-      $or: [
-        { category: categoryType },
-        { category: categoryDoc?._id }
-      ]
-    });
+      // Delete the projects
+      const result = await Project.deleteMany({
+        $or: [
+          { category: categoryType },
+          { category: categoryDoc?._id }
+        ]
+      });
 
-    await logAction('Projects deleted', {
-      category: categoryType,
-      count: result.deletedCount,
-      deletedBy: session.user.email
-    });
+      await logAction('Projects deleted', {
+        category: categoryType,
+        count: result.deletedCount,
+        deletedBy: session.user.email
+      });
 
-    return Response.json({ 
-      message: 'Projects deleted successfully',
-      deletedCount: result.deletedCount 
-    });
+      return NextResponse.json({ 
+        message: 'Projects deleted successfully',
+        deletedCount: result.deletedCount 
+      });
+    } catch (err) {
+      throw new DatabaseError(`Failed to delete projects for category: ${categoryType}`, { cause: err });
+    }
   } catch (error) {
-    console.error('Error deleting projects:', error);
-    await logError('system', 'Delete projects error', error as Error);
-    return Response.json({ error: 'Failed to delete projects' }, { status: 500 });
+    return handleError(error as Error | BaseError);
   }
 } 

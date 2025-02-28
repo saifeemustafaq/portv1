@@ -20,11 +20,15 @@ async function getProjects(category: CategoryType) {
     const headersList = await headers();
     const cookie = headersList.get('cookie');
     const host = headersList.get('host') || 'localhost:3000';
-    const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
+    
+    // In development, always use http for localhost
+    const protocol = host.includes('localhost') ? 'http' : 'https';
 
     // Construct absolute URL using headers
     const url = new URL(`/api/admin/project`, `${protocol}://${host}`);
     url.searchParams.set('category', category);
+
+    console.log('Fetching projects from:', url.toString());
 
     const response = await fetch(url, {
       cache: 'no-store',
@@ -35,29 +39,37 @@ async function getProjects(category: CategoryType) {
       credentials: 'include',
     });
     
+    console.log('Response status:', response.status);
+    
     if (!response.ok) {
       if (response.status === 401) {
         throw new Error('Authentication required - please log in again');
       }
       
       const errorText = await response.text();
+      console.error('Error response text:', errorText);
+      
       let errorMessage;
       try {
         const errorData = JSON.parse(errorText);
         errorMessage = errorData.message;
+        console.error('Parsed error message:', errorMessage);
       } catch {
         // If we get HTML back, it's likely a 404 page
         if (errorText.includes('<!DOCTYPE html>')) {
           throw new Error('Authentication required - please log in again');
         }
         errorMessage = errorText;
+        console.error('Raw error message:', errorMessage);
       }
       throw new ProjectFetchError(category, errorMessage);
     }
 
     const data = await response.json();
+    console.log('Successfully fetched projects:', data);
     return data;
   } catch (error) {
+    console.error('Error in getProjects:', error);
     if (error instanceof ProjectFetchError) {
       throw error;
     }

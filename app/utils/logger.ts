@@ -1,6 +1,7 @@
 import Log from '@/models/Log';
 import { getServerSession } from 'next-auth';
 import connectDB from '@/lib/db';
+import type { LogLevel, LogCategory, LogDetails, LogData, LogMessage } from '@/app/types/logging';
 
 type LoggerErrorDetails = Record<string, unknown>;
 
@@ -26,45 +27,34 @@ class LogConnectionError extends LoggerError {
   }
 }
 
-export type LogLevel = 'info' | 'warn' | 'error';
-export type LogCategory = 'auth' | 'action' | 'system' | 'performance';
-
-export interface LogDetails {
-  [key: string]: string | number | boolean | null | undefined | Record<string, unknown>;
-}
-
-interface LogData {
-  message: string;
-  details?: LogDetails;
-  userId?: string;
-  username?: string;
-  ip?: string;
-  userAgent?: string;
-  path?: string;
-  method?: string;
-}
-
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
-
 const isServer = () => {
-  return typeof window === 'undefined' && process.env.NEXT_RUNTIME === 'nodejs';
+  return typeof window === 'undefined';
+};
+
+const validateLogLevel = (level: string): level is LogLevel => {
+  return ['error', 'warn', 'info', 'debug'].includes(level);
+};
+
+const validateLogCategory = (category: string): category is LogCategory => {
+  return ['auth', 'mongodb', 'bootstrap', 'system', 'action', 'performance'].includes(category);
 };
 
 const validateLogData = (level: LogLevel, category: LogCategory, data: LogData) => {
   if (!data.message) {
     throw new LoggerError('Log message is required');
   }
-  if (!['info', 'warn', 'error'].includes(level)) {
-    throw new LoggerError('Invalid log level', { level });
+  
+  if (!validateLogLevel(level)) {
+    throw new LoggerError(`Invalid log level: ${level}`);
   }
-  if (!['auth', 'action', 'system', 'performance'].includes(category)) {
-    throw new LoggerError('Invalid log category', { category });
-  }
-  if (data.details && typeof data.details !== 'object') {
-    throw new LoggerError('Log details must be an object', { details: typeof data.details });
+  
+  if (!validateLogCategory(category)) {
+    throw new LoggerError(`Invalid log category: ${category}`);
   }
 };
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -218,4 +208,69 @@ export async function logError(
   } catch (error) {
     console.error('Error in logError:', error);
   }
-} 
+}
+
+class Logger {
+  private formatError(error: unknown): Record<string, unknown> {
+    if (error instanceof Error) {
+      return {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      };
+    }
+    return { error };
+  }
+
+  private log(level: LogLevel, category: LogCategory, message: string, details?: Record<string, unknown>) {
+    const logMessage: LogMessage = {
+      timestamp: new Date().toISOString(),
+      level,
+      category,
+      message,
+      details,
+    };
+
+    // In development, log to console with colors
+    if (process.env.NODE_ENV === 'development') {
+      const colors = {
+        error: '\x1b[31m', // red
+        warn: '\x1b[33m',  // yellow
+        info: '\x1b[36m',  // cyan
+        debug: '\x1b[90m', // gray
+      };
+      const reset = '\x1b[0m';
+
+      console.log(
+        `${colors[level]}[${logMessage.timestamp}] [${level.toUpperCase()}] [${category}] ${message}${reset}`,
+        details || ''
+      );
+    } else {
+      // In production, log as JSON for better parsing
+      console.log(JSON.stringify(logMessage));
+    }
+  }
+
+  error(category: LogCategory, message: string, details?: { error?: unknown }) {
+    this.log('error', category, message, {
+      ...details,
+      ...(details?.error ? { error: this.formatError(details.error) } : {}),
+    });
+  }
+
+  warn(category: LogCategory, message: string, details?: Record<string, unknown>) {
+    this.log('warn', category, message, details);
+  }
+
+  info(category: LogCategory, message: string, details?: Record<string, unknown>) {
+    this.log('info', category, message, details);
+  }
+
+  debug(category: LogCategory, message: string, details?: Record<string, unknown>) {
+    if (process.env.NODE_ENV === 'development') {
+      this.log('debug', category, message, details);
+    }
+  }
+}
+
+export const logger = new Logger(); 

@@ -24,11 +24,6 @@ const nextConfig = {
   experimental: {
     serverActions: {
       allowedOrigins: ['localhost:3000']
-    },
-    turbo: {
-      rules: {
-        // Add any specific Turbopack rules if needed
-      }
     }
   },
   // Add proper module resolution

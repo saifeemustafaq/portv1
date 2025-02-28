@@ -1,4 +1,4 @@
-import type { LogLevel, LogCategory, LogDetails } from './logger';
+import type { LogLevel, LogCategory, LogDetails } from '@/app/types/logging';
 
 // Generate a unique correlation ID for the session
 const sessionCorrelationId = Math.random().toString(36).substring(2, 15);
@@ -28,8 +28,8 @@ async function logToServer(
     ...details,
     correlationId: sessionCorrelationId,
     timestamp: new Date().toISOString(),
-    userAgent: navigator.userAgent,
-    url: window.location.href,
+    userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
+    url: typeof window !== 'undefined' ? window.location.href : 'unknown',
   };
 
   // Console logging with styling
@@ -51,15 +51,24 @@ async function logToServer(
         level,
         category,
         message,
-        details: enhancedDetails,
+        details: {
+          ...details,
+          timestamp: new Date().toISOString(),
+          userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
+          url: typeof window !== 'undefined' ? window.location.href : 'unknown',
+          correlationId: sessionCorrelationId,
+        },
       }),
     });
 
     if (!response.ok) {
-      console.error('Failed to log to server:', await response.text());
+      // Log to console if API request fails
+      console.warn(`Failed to send log to server: ${response.status} ${response.statusText}`);
+      return;
     }
   } catch (error) {
-    console.error('Error logging to server:', error);
+    // Silently fail but log to console - we don't want client logging to break the app
+    console.warn('Failed to send log to server:', error);
   }
 }
 

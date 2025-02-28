@@ -34,7 +34,13 @@ export async function middleware(request: NextRequest) {
       secret: process.env.NEXTAUTH_SECRET,
     }) as CustomJWT | null;
 
-    console.log('Middleware - Token retrieved:', token ? 'yes' : 'no');
+    console.log('Middleware - Token details:', {
+      hasToken: !!token,
+      hasUser: !!token?.user,
+      userEmail: token?.user?.email,
+      sessionId: token?.user?.sessionId,
+      path
+    });
 
     // Redirect to login if trying to access a protected route without being authenticated
     if (!token || !token.user) {

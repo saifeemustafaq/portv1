@@ -147,7 +147,10 @@ export default function LoginForm() {
         username,
         password,
         redirect: false,
+        callbackUrl: '/admin/dashboard'
       });
+
+      console.log('Login attempt result:', result);
 
       if (result?.error) {
         handleLoginAttempt(false);
@@ -158,11 +161,38 @@ export default function LoginForm() {
         }).catch(error => console.error('Failed to log auth error:', error));
           
         setErrors({ general: 'Invalid username or password' });
-      } else {
+      } else if (result?.ok) {
         handleLoginAttempt(true);
         
         logClientAuth('Login successful')
           .catch(error => console.error('Failed to log auth success:', error));
+          
+        // Wait for session to be available
+        let attempts = 0;
+        const maxAttempts = 10;
+        const checkSession = async () => {
+          if (attempts >= maxAttempts) {
+            console.error('Failed to confirm session after login');
+            setErrors({ general: 'Session initialization failed. Please try again.' });
+            return;
+          }
+          
+          const session = await fetch('/api/auth/session');
+          const sessionData = await session.json();
+          console.log('Session check attempt', attempts + 1, sessionData);
+          
+          if (sessionData?.user) {
+            router.replace('/admin/dashboard');
+          } else {
+            attempts++;
+            setTimeout(checkSession, 500);
+          }
+        };
+        
+        await checkSession();
+      } else {
+        console.error('Unexpected login result:', result);
+        setErrors({ general: 'An unexpected error occurred during login' });
       }
     } catch (error) {
       setRecoveryMode(true);

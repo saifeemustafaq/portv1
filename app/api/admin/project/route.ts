@@ -26,6 +26,7 @@ async function handleGetProjects(request: NextRequest) {
 
   try {
     await connectDB();
+    console.log('Database connection established');
   } catch (error) {
     console.error('Database connection error:', error);
     throw new DatabaseError('Failed to connect to database', { 
@@ -57,6 +58,8 @@ async function handleGetProjects(request: NextRequest) {
   try {
     // Find the category document
     const categoryDoc = await Category.findOne({ category, enabled: true });
+    console.log('Category document:', categoryDoc);
+    
     if (!categoryDoc) {
       console.log(`Category ${category} not found or not enabled`);
       return NextResponse.json({ projects: [] });
@@ -96,6 +99,7 @@ async function handleGetProjects(request: NextRequest) {
       );
 
       if (projectsToUpdate.length > 0) {
+        console.log(`Updating ${projectsToUpdate.length} projects with string categories`);
         await Project.bulkWrite(
           projectsToUpdate.map(project => ({
             updateOne: {
@@ -108,20 +112,12 @@ async function handleGetProjects(request: NextRequest) {
       
       return NextResponse.json({ projects: validProjects });
     } catch (error) {
-      console.error('Project fetch error:', error);
-      await logError('system', 'Get projects error', error as Error);
-      throw new DatabaseError('Failed to fetch projects', { 
-        error,
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
+      console.error('Error executing project query:', error);
+      throw error;
     }
   } catch (error) {
-    console.error('Project fetch error:', error);
-    await logError('system', 'Get projects error', error as Error);
-    throw new DatabaseError('Failed to fetch projects', { 
-      error,
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
+    console.error('Error in handleGetProjects:', error);
+    throw error;
   }
 }
 

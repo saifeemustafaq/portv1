@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { RiRefreshLine, RiDownloadLine, RiFilterLine, RiCalendarLine } from 'react-icons/ri';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+import { ErrorBoundary } from '@/app/components/ErrorBoundary';
+import { logClientError, logClientAction } from '@/app/utils/clientLogger';
 
 interface LogDetails {
   [key: string]: string | number | boolean | null | undefined;
@@ -32,7 +34,7 @@ interface PaginationInfo {
   totalPages: number;
 }
 
-export default function LogMonitorPage() {
+function LogMonitorContent() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +42,7 @@ export default function LogMonitorPage() {
   const [category, setCategory] = useState<'all' | 'auth' | 'action' | 'system'>('all');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [pagination, setPagination] = useState<PaginationInfo>({
     total: 0,
     page: 1,
@@ -50,6 +53,8 @@ export default function LogMonitorPage() {
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
+      
       const params = new URLSearchParams();
       if (level !== 'all') params.append('level', level);
       if (category !== 'all') params.append('category', category);
@@ -59,48 +64,107 @@ export default function LogMonitorPage() {
       params.append('limit', pagination.limit.toString());
 
       const response = await fetch(`/api/logs?${params.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch logs');
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch logs: ${response.status} ${errorText}`);
+      }
+      
       const data = await response.json();
-      setLogs(data.logs);
-      setPagination(data.pagination);
-      setError(null);
-    } catch {
+      setLogs(data.logs || []);
+      setPagination(data.pagination || {
+        total: 0,
+        page: 1,
+        limit: 50,
+        totalPages: 0
+      });
+      
+      // Reset retry count on success
+      setRetryCount(0);
+      
+      // Log successful action
+      await logClientAction('Logs fetched successfully', {
+        filters: { level, category, startDate, endDate },
+        resultsCount: data.logs?.length || 0
+      });
+    } catch (err) {
+      const error = err as Error;
       setError('Failed to fetch logs. Please try again later.');
+      
+      // Log the error
+      await logClientError('system', 'Failed to fetch logs', error);
+      
+      console.error('Error fetching logs:', error);
     } finally {
       setLoading(false);
     }
   }, [level, category, startDate, endDate, pagination.page, pagination.limit]);
 
+  const retryFetchLogs = useCallback(async () => {
+    if (retryCount < 3) {
+      setRetryCount(prev => prev + 1);
+      await fetchLogs();
+    }
+  }, [fetchLogs, retryCount]);
+
   useEffect(() => {
-    void fetchLogs();
+    const fetchData = async () => {
+      try {
+        await fetchLogs();
+      } catch (err) {
+        const error = err as Error;
+        console.error('Error in useEffect:', error);
+        await logClientError('system', 'Error in logs page useEffect', error);
+      }
+    };
+    
+    void fetchData();
   }, [level, category, startDate, endDate, pagination.page, fetchLogs]);
 
-  const handleRefresh = () => {
-    fetchLogs();
+  const handleRefresh = async () => {
+    try {
+      await logClientAction('Logs refresh requested');
+      await fetchLogs();
+    } catch (err) {
+      const error = err as Error;
+      await logClientError('system', 'Error refreshing logs', error);
+      setError('Failed to refresh logs. Please try again.');
+    }
   };
 
-  const handleDownload = () => {
-    const logText = logs
-      .map(log => {
-        const details = JSON.stringify(log.details, null, 2);
-        return `[${new Date(log.timestamp).toLocaleString()}] ${log.level.toUpperCase()} [${log.category}]: ${log.message}
+  const handleDownload = async () => {
+    try {
+      const logText = logs
+        .map(log => {
+          const details = JSON.stringify(log.details, null, 2);
+          return `[${new Date(log.timestamp).toLocaleString()}] ${log.level.toUpperCase()} [${log.category}]: ${log.message}
 User: ${log.username || 'N/A'}
 IP: ${log.ip || 'N/A'}
 Path: ${log.path || 'N/A'}
 Details: ${details}
 -------------------`;
-      })
-      .join('\n');
-    
-    const blob = new Blob([logText], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `logs-${new Date().toISOString()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+        })
+        .join('\n');
+      
+      const blob = new Blob([logText], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `logs-${new Date().toISOString()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      await logClientAction('Logs downloaded', { 
+        count: logs.length,
+        filters: { level, category, startDate, endDate }
+      });
+    } catch (err) {
+      const error = err as Error;
+      await logClientError('system', 'Error downloading logs', error);
+      setError('Failed to download logs. Please try again.');
+    }
   };
 
   const handlePageChange = (newPage: number) => {
@@ -122,6 +186,7 @@ Details: ${details}
           <button
             onClick={handleRefresh}
             className="flex items-center px-4 py-2 text-sm font-medium rounded-lg bg-[#1a1f2e] text-white hover:bg-[#2a2f3e] transition-colors"
+            disabled={loading}
           >
             <RiRefreshLine className="mr-2 h-5 w-5" />
             Refresh
@@ -129,6 +194,7 @@ Details: ${details}
           <button
             onClick={handleDownload}
             className="flex items-center px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+            disabled={loading || logs.length === 0}
           >
             <RiDownloadLine className="mr-2 h-5 w-5" />
             Download Logs
@@ -143,6 +209,7 @@ Details: ${details}
             value={level}
             onChange={(e) => setLevel(e.target.value as 'all' | 'info' | 'warn' | 'error')}
             className="bg-[#1a1f2e] text-white border border-gray-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={loading}
           >
             <option value="all">All Levels</option>
             <option value="info">Info</option>
@@ -156,6 +223,7 @@ Details: ${details}
             value={category}
             onChange={(e) => setCategory(e.target.value as 'all' | 'auth' | 'action' | 'system')}
             className="bg-[#1a1f2e] text-white border border-gray-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={loading}
           >
             <option value="all">All Categories</option>
             <option value="auth">Authentication</option>
@@ -173,6 +241,7 @@ Details: ${details}
             className="bg-[#1a1f2e] text-white border border-gray-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             showTimeSelect
             dateFormat="MM/dd/yyyy h:mm aa"
+            disabled={loading}
           />
           <DatePicker
             selected={endDate}
@@ -181,13 +250,21 @@ Details: ${details}
             className="bg-[#1a1f2e] text-white border border-gray-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             showTimeSelect
             dateFormat="MM/dd/yyyy h:mm aa"
+            disabled={loading}
           />
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-500/10 text-red-400 text-sm text-center py-2 px-4 rounded-lg border border-red-500/20">
-          {error}
+        <div className="bg-red-500/10 text-red-400 text-sm py-2 px-4 rounded-lg border border-red-500/20 flex justify-between items-center">
+          <span>{error}</span>
+          <button 
+            onClick={retryFetchLogs}
+            disabled={retryCount >= 3 || loading}
+            className="text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 px-2 py-1 rounded transition-colors"
+          >
+            Retry {retryCount > 0 ? `(${retryCount}/3)` : ''}
+          </button>
         </div>
       )}
 
@@ -265,6 +342,7 @@ Details: ${details}
                   ? 'bg-blue-600 text-white'
                   : 'bg-[#1a1f2e] text-[#94a3b8] hover:bg-[#2a2f3e]'
               }`}
+              disabled={loading}
             >
               {page}
             </button>
@@ -272,5 +350,13 @@ Details: ${details}
         </div>
       )}
     </div>
+  );
+}
+
+export default function LogMonitorPage() {
+  return (
+    <ErrorBoundary name="LogMonitorPage">
+      <LogMonitorContent />
+    </ErrorBoundary>
   );
 } 
