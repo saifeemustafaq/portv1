@@ -155,8 +155,7 @@ export const authOptions: NextAuthOptions = {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: (process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://')) ?? false,
-        domain: process.env.NODE_ENV === 'production' ? '.netlify.app' : undefined
+        secure: process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://'),
       }
     }
   },
