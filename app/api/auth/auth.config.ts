@@ -112,6 +112,7 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt',
     maxAge: 24 * 60 * 60, // 24 hours
   },
+  secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
     async jwt({ token, user }) {
       try {
@@ -154,7 +155,8 @@ export const authOptions: NextAuthOptions = {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://') ?? false
+        secure: (process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://')) ?? false,
+        domain: process.env.NODE_ENV === 'production' ? '.netlify.app' : undefined
       }
     }
   },
