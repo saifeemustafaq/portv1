@@ -167,7 +167,7 @@ export default function LoginForm() {
         logClientAuth('Login successful')
           .catch(error => console.error('Failed to log auth success:', error));
           
-        // Wait for session to be available
+        // Enhanced session checking
         let attempts = 0;
         const maxAttempts = 10;
         const checkSession = async () => {
@@ -177,15 +177,34 @@ export default function LoginForm() {
             return;
           }
           
-          const session = await fetch('/api/auth/session');
-          const sessionData = await session.json();
-          console.log('Session check attempt', attempts + 1, sessionData);
-          
-          if (sessionData?.user) {
-            router.replace('/admin/dashboard');
-          } else {
+          try {
+            const session = await fetch('/api/auth/session', {
+              method: 'GET',
+              credentials: 'include',
+              headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+              }
+            });
+            
+            if (!session.ok) {
+              throw new Error(`Session check failed with status: ${session.status}`);
+            }
+            
+            const sessionData = await session.json();
+            console.log('Session check attempt', attempts + 1, sessionData);
+            
+            if (sessionData?.user) {
+              router.replace('/admin/dashboard');
+            } else {
+              attempts++;
+              // Exponential backoff
+              setTimeout(checkSession, Math.min(500 * Math.pow(1.5, attempts), 3000));
+            }
+          } catch (error) {
+            console.error('Session check error:', error);
             attempts++;
-            setTimeout(checkSession, 500);
+            setTimeout(checkSession, Math.min(500 * Math.pow(1.5, attempts), 3000));
           }
         };
         

@@ -155,8 +155,31 @@ export const authOptions: NextAuthOptions = {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: (process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://')) ?? false,
-        domain: process.env.NODE_ENV === 'production' ? '.netlify.app' : undefined
+        secure: process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://'),
+        domain: process.env.NODE_ENV === 'production' 
+          ? new URL(process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_SITE_URL || '').hostname 
+          : undefined
+      }
+    },
+    callbackUrl: {
+      name: process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://')
+        ? '__Secure-next-auth.callback-url'
+        : 'next-auth.callback-url',
+      options: {
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://')
+      }
+    },
+    csrfToken: {
+      name: process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://')
+        ? '__Host-next-auth.csrf-token'
+        : 'next-auth.csrf-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://')
       }
     }
   },
