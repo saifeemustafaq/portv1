@@ -59,22 +59,7 @@ function DashboardWidget({
   );
 }
 
-interface DashboardContentProps {
-  initialSession: {
-    user: {
-      id: string;
-      name: string;
-      email: string;
-      loginTime: number;
-      sessionId: string;
-    };
-    expires: string;
-    loginTime: number;
-    sessionId: string;
-  };
-}
-
-export default function DashboardContent({ initialSession }: DashboardContentProps) {
+export default function DashboardContent() {
   const [stats, setStats] = useState<DashboardStats>({
     products: 0,
     software: 0,
