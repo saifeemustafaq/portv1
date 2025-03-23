@@ -82,7 +82,9 @@ interface CategoryPageProps {
 // Using a type assertion to work around Next.js 15.1.6 type system bug
 // while maintaining type safety for our component's implementation
 export default async function Page({ params, _searchParams }: CategoryPageProps) {
-  console.log('[Page] Rendering with params:', params);
+  // Wait for the params promise to resolve
+  const resolvedParams = await Promise.resolve(params);
+  console.log('[Page] Rendering with params:', resolvedParams);
 
   // First check authentication
   const session = await getServerSession(authOptions);
@@ -90,37 +92,37 @@ export default async function Page({ params, _searchParams }: CategoryPageProps)
   
   if (!session?.user?.email) {
     console.log('[Page] No session, redirecting to login');
-    redirect(`/admin/login?returnUrl=${encodeURIComponent(`/admin/${params.category}`)}`);
+    redirect(`/admin/login?returnUrl=${encodeURIComponent(`/admin/${resolvedParams.category}`)}`);
   }
 
   // Validate category
-  if (!params.category || !isValidCategory(params.category)) {
-    console.log('[Page] Invalid category:', params.category);
+  if (!resolvedParams.category || !isValidCategory(resolvedParams.category)) {
+    console.log('[Page] Invalid category:', resolvedParams.category);
     notFound();
   }
 
-  const config = CATEGORY_CONFIG[params.category];
+  const config = CATEGORY_CONFIG[resolvedParams.category];
   let projects;
   
   try {
-    console.log('[Page] Fetching projects for category:', params.category);
-    const response = await getProjects(params.category);
+    console.log('[Page] Fetching projects for category:', resolvedParams.category);
+    const response = await getProjects(resolvedParams.category);
     projects = response.projects;
     console.log('[Page] Projects fetched:', projects?.length);
   } catch (error) {
     console.error('[Page] Error fetching projects:', error);
     if (error instanceof Error && error.message.includes('Authentication required')) {
-      redirect(`/admin/login?returnUrl=${encodeURIComponent(`/admin/${params.category}`)}`);
+      redirect(`/admin/login?returnUrl=${encodeURIComponent(`/admin/${resolvedParams.category}`)}`);
     }
     throw error;
   }
 
   // Create a ProjectCategory object from the category type and config
   const categoryObject: ProjectCategory = {
-    _id: params.category,
+    _id: resolvedParams.category,
     name: config.title,
     description: config.description,
-    category: params.category,
+    category: resolvedParams.category,
     enabled: true,
     title: config.title,
     createdAt: new Date(),
@@ -128,13 +130,15 @@ export default async function Page({ params, _searchParams }: CategoryPageProps)
   };
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">{config.title}</h1>
-        <p className="mt-2 text-gray-600">{config.description}</p>
-      </div>
+    <div className="min-h-screen bg-[#0f1117] p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-[#f8fafc]">{config.title}</h1>
+          <p className="mt-2 text-[#94a3b8]">{config.description}</p>
+        </div>
 
-      <CategoryPageClient projects={projects} category={categoryObject} />
+        <CategoryPageClient projects={projects} category={categoryObject} />
+      </div>
     </div>
   );
 }
