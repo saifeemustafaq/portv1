@@ -23,7 +23,11 @@ const nextConfig = {
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000']
+      allowedOrigins: [
+        'localhost:3000',
+        'adminmustafa.netlify.app',
+        /^deploy-preview-\d+--adminmustafa\.netlify\.app$/
+      ]
     }
   },
   // Add proper module resolution
