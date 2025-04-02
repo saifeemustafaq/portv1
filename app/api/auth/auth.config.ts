@@ -155,10 +155,8 @@ export const authOptions: NextAuthOptions = {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://'),
-        domain: process.env.NODE_ENV === 'production' 
-          ? new URL(process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_SITE_URL || '').hostname 
-          : undefined
+        secure: process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://'),
+        domain: undefined  // Let the browser handle the domain automatically
       }
     },
     callbackUrl: {
@@ -168,7 +166,7 @@ export const authOptions: NextAuthOptions = {
       options: {
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://')
+        secure: process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://')
       }
     },
     csrfToken: {
@@ -179,7 +177,7 @@ export const authOptions: NextAuthOptions = {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://')
+        secure: process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://')
       }
     }
   },

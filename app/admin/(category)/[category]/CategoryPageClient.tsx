@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ProjectCategory, Project } from '@/types/projects';
 import ProjectGrid from '@/app/components/ProjectGrid';
 import EmptyState from '@/app/components/EmptyState';
 import { ProjectDeleteError } from '@/app/utils/errors/ProjectErrors';
 import { Toast } from '@/app/components/ui/toast';
-import { ErrorBoundary } from '@/app/components/ErrorBoundary';
 import { logClientError, logClientAction } from '@/app/utils/clientLogger';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
@@ -16,29 +15,20 @@ interface CategoryPageClientProps {
   category: ProjectCategory;
 }
 
-// Extended props for the content component
-interface CategoryPageContentProps {
-  initialProjects: Project[];
-  category: ProjectCategory;
-}
-
-// Main component wrapped in error boundary
-export default function CategoryPageClient({ projects, category }: CategoryPageClientProps) {
-  return (
-    <ErrorBoundary name="CategoryPageClient">
-      <CategoryPageContent initialProjects={projects} category={category} />
-    </ErrorBoundary>
-  );
-}
-
-// Actual content component
-function CategoryPageContent({ initialProjects, category }: CategoryPageContentProps) {
-  const [projects, setProjects] = useState(initialProjects);
+// Main component
+export default function CategoryPageClient({ projects: initialProjects, category }: CategoryPageClientProps) {
+  const [projects, setProjects] = useState<Project[]>(initialProjects);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [deleteInProgress, setDeleteInProgress] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+
+  // Sync state when props change
+  useEffect(() => {
+    console.log('[CategoryPageClient] Received projects:', initialProjects?.length);
+    setProjects(initialProjects);
+  }, [initialProjects]);
 
   // Refresh projects data
   const refreshProjects = useCallback(async () => {
@@ -175,12 +165,8 @@ function CategoryPageContent({ initialProjects, category }: CategoryPageContentP
   return (
     <>
       {isLoading && (
-        <div className="mb-4 p-2 bg-blue-500/10 text-blue-400 text-sm rounded-lg border border-blue-500/20 flex items-center justify-center">
-          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          Loading projects...
+        <div className="mb-4 p-2 bg-blue-500/10 text-blue-400 text-sm rounded-lg">
+          Loading...
         </div>
       )}
       

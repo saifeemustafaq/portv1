@@ -8,6 +8,7 @@ import CategoryPageClient from './CategoryPageClient';
 import { Metadata } from 'next';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/auth.config';
+import { logError } from '@/app/utils/logger';
 
 // Type guard for CategoryType
 function isValidCategory(category: string): category is CategoryType {
@@ -21,17 +22,18 @@ async function getProjects(category: CategoryType) {
     const cookie = headersList.get('cookie');
     const host = headersList.get('host') || 'localhost:3000';
     
-    // In development, always use http for localhost
-    const protocol = host.includes('localhost') ? 'http' : 'https';
+    // Determine if we're in a local environment
+    const isLocalhost = host.includes('localhost') || host.match(/\d+\.\d+\.\d+\.\d+/);
+    const protocol = isLocalhost ? 'http' : 'https';
 
     // Construct absolute URL using headers
     const url = new URL(`/api/admin/project`, `${protocol}://${host}`);
     url.searchParams.set('category', category);
 
-    console.log('Fetching projects from:', url.toString());
+    console.log('[getProjects] Fetching from:', url.toString());
 
     const response = await fetch(url, {
-      cache: 'no-store',
+      cache: 'no-store', // Disable caching
       headers: {
         'Content-Type': 'application/json',
         ...(cookie ? { Cookie: cookie } : {}),
@@ -39,41 +41,33 @@ async function getProjects(category: CategoryType) {
       credentials: 'include',
     });
     
-    console.log('Response status:', response.status);
+    console.log('[getProjects] Response status:', response.status);
     
     if (!response.ok) {
       if (response.status === 401) {
-        throw new Error('Authentication required - please log in again');
+        throw new Error('Authentication required');
       }
       
       const errorText = await response.text();
-      console.error('Error response text:', errorText);
+      console.error('[getProjects] Error response:', errorText);
       
       let errorMessage;
       try {
         const errorData = JSON.parse(errorText);
         errorMessage = errorData.message;
-        console.error('Parsed error message:', errorMessage);
       } catch {
-        // If we get HTML back, it's likely a 404 page
-        if (errorText.includes('<!DOCTYPE html>')) {
-          throw new Error('Authentication required - please log in again');
-        }
         errorMessage = errorText;
-        console.error('Raw error message:', errorMessage);
       }
       throw new ProjectFetchError(category, errorMessage);
     }
 
     const data = await response.json();
-    console.log('Successfully fetched projects:', data);
+    console.log('[getProjects] Successfully fetched projects:', data);
     return data;
   } catch (error) {
-    console.error('Error in getProjects:', error);
-    if (error instanceof ProjectFetchError) {
-      throw error;
-    }
-    throw new ProjectFetchError(category, error instanceof Error ? error.message : undefined);
+    console.error('[getProjects] Error:', error);
+    await logError('system', 'Failed to fetch projects', error as Error);
+    throw error;
   }
 }
 
@@ -88,40 +82,47 @@ interface CategoryPageProps {
 // Using a type assertion to work around Next.js 15.1.6 type system bug
 // while maintaining type safety for our component's implementation
 export default async function Page({ params, _searchParams }: CategoryPageProps) {
+  // Wait for the params promise to resolve
+  const resolvedParams = await Promise.resolve(params);
+  console.log('[Page] Rendering with params:', resolvedParams);
+
   // First check authentication
   const session = await getServerSession(authOptions);
-  
-  // Destructure and await params at the start
-  const { category } = await Promise.resolve(params);
+  console.log('[Page] Session status:', !!session);
   
   if (!session?.user?.email) {
-    redirect(`/admin/login?returnUrl=${encodeURIComponent(`/admin/${category}`)}`);
+    console.log('[Page] No session, redirecting to login');
+    redirect(`/admin/login?returnUrl=${encodeURIComponent(`/admin/${resolvedParams.category}`)}`);
   }
 
   // Validate category
-  if (!category || !isValidCategory(category)) {
+  if (!resolvedParams.category || !isValidCategory(resolvedParams.category)) {
+    console.log('[Page] Invalid category:', resolvedParams.category);
     notFound();
   }
 
-  const config = CATEGORY_CONFIG[category];
+  const config = CATEGORY_CONFIG[resolvedParams.category];
   let projects;
   
   try {
-    const response = await getProjects(category);
+    console.log('[Page] Fetching projects for category:', resolvedParams.category);
+    const response = await getProjects(resolvedParams.category);
     projects = response.projects;
+    console.log('[Page] Projects fetched:', projects?.length);
   } catch (error) {
+    console.error('[Page] Error fetching projects:', error);
     if (error instanceof Error && error.message.includes('Authentication required')) {
-      redirect(`/admin/login?returnUrl=${encodeURIComponent(`/admin/${category}`)}`);
+      redirect(`/admin/login?returnUrl=${encodeURIComponent(`/admin/${resolvedParams.category}`)}`);
     }
-    throw error instanceof Error ? error : new Error(String(error));
+    throw error;
   }
 
   // Create a ProjectCategory object from the category type and config
   const categoryObject: ProjectCategory = {
-    _id: category,
+    _id: resolvedParams.category,
     name: config.title,
     description: config.description,
-    category: category,
+    category: resolvedParams.category,
     enabled: true,
     title: config.title,
     createdAt: new Date(),
@@ -129,13 +130,17 @@ export default async function Page({ params, _searchParams }: CategoryPageProps)
   };
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">{config.title}</h1>
-        <p className="mt-2 text-gray-600">{config.description}</p>
-      </div>
+    <div className="min-h-screen bg-[#0f1117] p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-[#f8fafc]">{config.title}</h1>
+          <p className="mt-2 text-[#94a3b8]">{config.description}</p>
+        </div>
 
-      <CategoryPageClient projects={projects} category={categoryObject} />
+        <CategoryPageClient projects={projects} category={categoryObject} />
+      </div>
     </div>
   );
-} 
+}
+
+export const dynamic = 'force-dynamic'; 

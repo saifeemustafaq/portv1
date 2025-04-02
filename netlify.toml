@@ -1,0 +1,25 @@
+[build]
+  command = "npm install && npm run build"
+  publish = ".next"
+
+[build.environment]
+  NEXT_TELEMETRY_DISABLED = "1"
+  NODE_VERSION = "20"
+
+# Production context
+[context.production.environment]
+  DEPLOY_URL = "https://adminmustafa.netlify.app"
+  NODE_ENV = "production"
+
+# Deploy preview context
+[context.deploy-preview.environment]
+  DEPLOY_URL = "https://deploy-preview-${REVIEW_ID}--adminmustafa.netlify.app"
+  NODE_ENV = "production"
+
+# Branch deploy context
+[context.branch-deploy.environment]
+  DEPLOY_URL = "https://${BRANCH}--adminmustafa.netlify.app"
+  NODE_ENV = "production"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs" 
